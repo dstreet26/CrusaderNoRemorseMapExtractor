@@ -3,3 +3,6 @@ cnr-development
 gog
 notes.md
 old
+node_modules
+.playwright-mcp
+*.png
