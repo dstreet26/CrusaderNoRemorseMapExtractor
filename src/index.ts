@@ -15,7 +15,7 @@ import * as path from "path";
 import * as fs from "fs";
 import { loadGameData } from "./gamedata";
 import { getFlxEntryData } from "./flx";
-import { parseFixedItems, resolveMapItems, sortMapItems, REMORSE_MISSIONS } from "./map";
+import { parseFixedItems, resolveMapItems, sortMapItems, REMORSE_MISSIONS, REBEL_BASE, REBEL_BASE_DESTROYED } from "./map";
 import { renderMap, renderShapeToPng } from "./renderer";
 import { parseShape } from "./shape";
 
@@ -346,6 +346,106 @@ program
         console.log(`  X: ${minX} - ${maxX}`);
         console.log(`  Y: ${minY} - ${maxY}`);
       }
+    } catch (err: any) {
+      console.error("Error:", err.message);
+      process.exit(1);
+    }
+  });
+
+// ── export-all ────────────────────────────────────────────────
+program
+  .command("export-all")
+  .description("Render all missions and special maps to PNG files in a folder")
+  .requiredOption("--input-data-dir <path>", "Path to Crusader game directory (containing STATIC/)")
+  .option("--output-dir <path>", "Output directory for PNG files", "exports")
+  .option("--scale <number>", "Scale factor (default 0.25)", "0.25")
+  .option("--floor <number>", "Floor number (filters by Z range)")
+  .option("--bg <color>", "Background color (hex, e.g. #000000)", "#000000")
+  .action(async (opts) => {
+    try {
+      const gd = loadGameData(opts.inputDataDir);
+      const outputDir = opts.outputDir;
+      fs.mkdirSync(outputDir, { recursive: true });
+
+      const scaleVal = parseFloat(opts.scale);
+      if (isNaN(scaleVal) || scaleVal <= 0) {
+        console.error("Invalid --scale value. Must be a positive number.");
+        process.exit(1);
+      }
+
+      const bgHex = opts.bg.replace("#", "");
+      const bgColor = {
+        r: parseInt(bgHex.substring(0, 2), 16),
+        g: parseInt(bgHex.substring(2, 4), 16),
+        b: parseInt(bgHex.substring(4, 6), 16),
+        a: 255,
+      };
+
+      let floorMinZ: number | undefined;
+      let floorMaxZ: number | undefined;
+      if (opts.floor !== undefined) {
+        const floor = parseInt(opts.floor, 10);
+        floorMinZ = floor * 40;
+        floorMaxZ = (floor + 1) * 40 - 1;
+      }
+
+      // Build the list of renders: missions 1–15 + rebel base variants
+      const jobs: { name: string; mapIndices: number[] }[] = [];
+      for (const missionNum of Object.keys(REMORSE_MISSIONS).map(Number).sort((a, b) => a - b)) {
+        const padded = String(missionNum).padStart(2, "0");
+        jobs.push({ name: `Mission_${padded}`, mapIndices: REMORSE_MISSIONS[missionNum] });
+      }
+      jobs.push({ name: "Rebel_Base", mapIndices: [REBEL_BASE] });
+      jobs.push({ name: "Rebel_Base_Destroyed", mapIndices: [REBEL_BASE_DESTROYED] });
+
+      console.log(`Exporting ${jobs.length} maps to ${outputDir}/ at scale ${scaleVal}...\n`);
+
+      let completed = 0;
+      for (const job of jobs) {
+        const outPath = path.join(outputDir, `${job.name}.png`);
+        console.log(`[${completed + 1}/${jobs.length}] ${job.name} (maps: ${job.mapIndices.join(", ")})...`);
+
+        // Load and merge fixed items
+        const allItems = [];
+        for (const idx of job.mapIndices) {
+          const mapData = getFlxEntryData(gd.fixedArchive, idx);
+          if (!mapData) {
+            console.warn(`  Warning: No data for map index ${idx}`);
+            continue;
+          }
+          const fixedItems = parseFixedItems(mapData);
+          const resolved = resolveMapItems(fixedItems, gd.globs, gd.typeFlags);
+          allItems.push(...resolved);
+        }
+
+        if (allItems.length === 0) {
+          console.warn(`  Skipping ${job.name}: no renderable items`);
+          completed++;
+          continue;
+        }
+
+        const result = await renderMap(allItems, gd.shapesArchive, gd.palette, {
+          bgColor,
+          scale: scaleVal,
+          floorMinZ,
+          floorMaxZ,
+          outputPath: outPath,
+          onProgress: (current, total) => {
+            process.stdout.write(`\r  Progress: ${current}/${total} (${Math.round((current / total) * 100)}%)`);
+          },
+        });
+
+        process.stdout.write("\n");
+
+        if (result.toString() !== "TILED") {
+          fs.writeFileSync(outPath, result);
+        }
+
+        console.log(`  ✓ ${job.name} → ${outPath}`);
+        completed++;
+      }
+
+      console.log(`\nDone! Exported ${completed} maps to ${outputDir}/`);
     } catch (err: any) {
       console.error("Error:", err.message);
       process.exit(1);
