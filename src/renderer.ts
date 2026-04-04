@@ -350,12 +350,13 @@ async function renderTiledOutput(
 }
 
 /**
- * Write a simple HTML viewer for tiled output.
+ * Write an interactive HTML viewer for tiled output with zoom/pan controls.
  */
 function writeHtmlViewer(
   outDir: string,
   metadata: { imageWidth: number; imageHeight: number; tileSize: number; cols: number; rows: number; tiles: Array<{ file: string; x: number; y: number; width: number; height: number }> }
 ): void {
+  const tilesJson = JSON.stringify(metadata.tiles);
   const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -363,31 +364,258 @@ function writeHtmlViewer(
 <title>Crusader Map Viewer</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #111; overflow: auto; }
+  body { background: #111; overflow: hidden; width: 100vw; height: 100vh; }
+  #viewport {
+    position: absolute; inset: 0; overflow: hidden;
+    cursor: grab;
+  }
+  #viewport.dragging { cursor: grabbing; }
   #map-container {
-    position: relative;
+    position: absolute;
     width: ${metadata.imageWidth}px;
     height: ${metadata.imageHeight}px;
+    transform-origin: 0 0;
+    will-change: transform;
   }
   #map-container img {
     position: absolute;
     display: block;
     image-rendering: pixelated;
   }
-  #info {
+  #hud {
     position: fixed; top: 8px; left: 8px;
-    color: #0f0; font: 14px monospace;
-    background: rgba(0,0,0,0.7); padding: 6px 10px;
-    border-radius: 4px; z-index: 10;
-    pointer-events: none;
+    color: #0f0; font: 13px monospace;
+    background: rgba(0,0,0,0.8); padding: 8px 12px;
+    border-radius: 6px; z-index: 100;
+    user-select: none;
+    display: flex; flex-direction: column; gap: 6px;
   }
+  #hud .title { font-size: 11px; opacity: 0.7; }
+  #hud .zoom-row { display: flex; align-items: center; gap: 8px; }
+  #hud button {
+    background: #333; color: #0f0; border: 1px solid #0f0;
+    font: 13px monospace; padding: 2px 8px; border-radius: 3px;
+    cursor: pointer; line-height: 1.4;
+  }
+  #hud button:hover { background: #0f0; color: #111; }
+  #hud .shortcuts { font-size: 10px; opacity: 0.5; margin-top: 2px; }
 </style>
 </head>
 <body>
-<div id="info">Crusader Map — ${metadata.imageWidth}×${metadata.imageHeight}px (${metadata.cols}×${metadata.rows} tiles)</div>
-<div id="map-container">
-${metadata.tiles.map(t => `  <img src="${t.file}" style="left:${t.x}px;top:${t.y}px;width:${t.width}px;height:${t.height}px;" loading="lazy">`).join("\n")}
+<div id="hud">
+  <div class="title">${metadata.imageWidth}\u00d7${metadata.imageHeight}px &middot; ${metadata.cols}\u00d7${metadata.rows} tiles</div>
+  <div class="zoom-row">
+    <button id="btn-out" title="Zoom out (\u2212)">\u2212</button>
+    <span id="zoom-label">100%</span>
+    <button id="btn-in" title="Zoom in (+)">+</button>
+    <button id="btn-reset" title="Reset (0)">Reset</button>
+    <button id="btn-fit" title="Fit to window (F)">Fit</button>
+  </div>
+  <div class="shortcuts">Scroll=zoom &middot; Drag=pan &middot; +/\u2212/0/F &middot; Arrows=pan</div>
 </div>
+<div id="viewport">
+  <div id="map-container"></div>
+</div>
+<script>
+(function() {
+  const MAP_W = ${metadata.imageWidth}, MAP_H = ${metadata.imageHeight};
+  const TILES = ${tilesJson};
+  const TILE_SIZE = ${metadata.tileSize};
+  const COLS = ${metadata.cols}, ROWS = ${metadata.rows};
+
+  const viewport = document.getElementById('viewport');
+  const container = document.getElementById('map-container');
+  const zoomLabel = document.getElementById('zoom-label');
+
+  // State
+  let zoom = 1;
+  let panX = 0, panY = 0;
+  const MIN_ZOOM = 0.02, MAX_ZOOM = 8;
+
+  // Tile tracking: which tiles have been added to DOM
+  const loadedTiles = new Set();
+  const tileElements = new Map();
+
+  function applyTransform() {
+    container.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + zoom + ')';
+    zoomLabel.textContent = Math.round(zoom * 100) + '%';
+    updateVisibleTiles();
+  }
+
+  // Determine which tiles are visible and load/unload them
+  function updateVisibleTiles() {
+    const vw = viewport.clientWidth;
+    const vh = viewport.clientHeight;
+
+    // Viewport bounds in map-space
+    const mapLeft = -panX / zoom;
+    const mapTop = -panY / zoom;
+    const mapRight = mapLeft + vw / zoom;
+    const mapBottom = mapTop + vh / zoom;
+
+    // Which tile columns/rows are visible (with 1-tile margin for smooth scrolling)
+    const colMin = Math.max(0, Math.floor(mapLeft / TILE_SIZE) - 1);
+    const colMax = Math.min(COLS - 1, Math.floor(mapRight / TILE_SIZE) + 1);
+    const rowMin = Math.max(0, Math.floor(mapTop / TILE_SIZE) - 1);
+    const rowMax = Math.min(ROWS - 1, Math.floor(mapBottom / TILE_SIZE) + 1);
+
+    const nowVisible = new Set();
+
+    for (let r = rowMin; r <= rowMax; r++) {
+      for (let c = colMin; c <= colMax; c++) {
+        const idx = r * COLS + c;
+        nowVisible.add(idx);
+        if (!loadedTiles.has(idx)) {
+          const t = TILES[idx];
+          if (!t) continue;
+          const img = document.createElement('img');
+          img.src = t.file;
+          img.style.cssText = 'left:' + t.x + 'px;top:' + t.y + 'px;width:' + t.width + 'px;height:' + t.height + 'px;';
+          container.appendChild(img);
+          loadedTiles.add(idx);
+          tileElements.set(idx, img);
+        }
+      }
+    }
+
+    // Unload tiles far from viewport to save memory
+    for (const idx of loadedTiles) {
+      if (!nowVisible.has(idx)) {
+        const el = tileElements.get(idx);
+        if (el) { container.removeChild(el); tileElements.delete(idx); }
+        loadedTiles.delete(idx);
+      }
+    }
+  }
+
+  // Zoom centered on a point in viewport space
+  function zoomAt(cx, cy, factor) {
+    const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * factor));
+    const ratio = newZoom / zoom;
+    panX = cx - (cx - panX) * ratio;
+    panY = cy - (cy - panY) * ratio;
+    zoom = newZoom;
+    applyTransform();
+  }
+
+  function zoomCenter(factor) {
+    zoomAt(viewport.clientWidth / 2, viewport.clientHeight / 2, factor);
+  }
+
+  function resetView() {
+    zoom = 1; panX = 0; panY = 0;
+    applyTransform();
+  }
+
+  function fitView() {
+    const vw = viewport.clientWidth;
+    const vh = viewport.clientHeight;
+    zoom = Math.min(vw / MAP_W, vh / MAP_H, MAX_ZOOM);
+    panX = (vw - MAP_W * zoom) / 2;
+    panY = (vh - MAP_H * zoom) / 2;
+    applyTransform();
+  }
+
+  // Mouse wheel zoom
+  viewport.addEventListener('wheel', function(e) {
+    e.preventDefault();
+    const rect = viewport.getBoundingClientRect();
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+    const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    zoomAt(cx, cy, factor);
+  }, { passive: false });
+
+  // Mouse drag pan
+  let dragging = false, dragStartX = 0, dragStartY = 0, panStartX = 0, panStartY = 0;
+
+  viewport.addEventListener('mousedown', function(e) {
+    if (e.button !== 0) return;
+    dragging = true;
+    dragStartX = e.clientX; dragStartY = e.clientY;
+    panStartX = panX; panStartY = panY;
+    viewport.classList.add('dragging');
+    e.preventDefault();
+  });
+
+  window.addEventListener('mousemove', function(e) {
+    if (!dragging) return;
+    panX = panStartX + (e.clientX - dragStartX);
+    panY = panStartY + (e.clientY - dragStartY);
+    applyTransform();
+  });
+
+  window.addEventListener('mouseup', function() {
+    dragging = false;
+    viewport.classList.remove('dragging');
+  });
+
+  // Touch support: pinch-to-zoom + drag
+  let lastTouchDist = 0, lastTouchMid = null, touching = false;
+
+  viewport.addEventListener('touchstart', function(e) {
+    if (e.touches.length === 1) {
+      touching = true;
+      dragStartX = e.touches[0].clientX; dragStartY = e.touches[0].clientY;
+      panStartX = panX; panStartY = panY;
+    } else if (e.touches.length === 2) {
+      const dx = e.touches[1].clientX - e.touches[0].clientX;
+      const dy = e.touches[1].clientY - e.touches[0].clientY;
+      lastTouchDist = Math.hypot(dx, dy);
+      lastTouchMid = { x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+                        y: (e.touches[0].clientY + e.touches[1].clientY) / 2 };
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  viewport.addEventListener('touchmove', function(e) {
+    if (e.touches.length === 1 && touching) {
+      panX = panStartX + (e.touches[0].clientX - dragStartX);
+      panY = panStartY + (e.touches[0].clientY - dragStartY);
+      applyTransform();
+    } else if (e.touches.length === 2) {
+      const dx = e.touches[1].clientX - e.touches[0].clientX;
+      const dy = e.touches[1].clientY - e.touches[0].clientY;
+      const dist = Math.hypot(dx, dy);
+      if (lastTouchDist > 0) {
+        const mid = { x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+                      y: (e.touches[0].clientY + e.touches[1].clientY) / 2 };
+        const rect = viewport.getBoundingClientRect();
+        zoomAt(mid.x - rect.left, mid.y - rect.top, dist / lastTouchDist);
+      }
+      lastTouchDist = dist;
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  viewport.addEventListener('touchend', function() { touching = false; lastTouchDist = 0; });
+
+  // Keyboard shortcuts
+  window.addEventListener('keydown', function(e) {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    const PAN_STEP = 100;
+    switch (e.key) {
+      case '+': case '=': zoomCenter(1.25); e.preventDefault(); break;
+      case '-': case '_': zoomCenter(1 / 1.25); e.preventDefault(); break;
+      case '0': resetView(); e.preventDefault(); break;
+      case 'f': case 'F': fitView(); e.preventDefault(); break;
+      case 'ArrowLeft':  panX += PAN_STEP; applyTransform(); e.preventDefault(); break;
+      case 'ArrowRight': panX -= PAN_STEP; applyTransform(); e.preventDefault(); break;
+      case 'ArrowUp':    panY += PAN_STEP; applyTransform(); e.preventDefault(); break;
+      case 'ArrowDown':  panY -= PAN_STEP; applyTransform(); e.preventDefault(); break;
+    }
+  });
+
+  // Buttons
+  document.getElementById('btn-in').addEventListener('click', function() { zoomCenter(1.25); });
+  document.getElementById('btn-out').addEventListener('click', function() { zoomCenter(1 / 1.25); });
+  document.getElementById('btn-reset').addEventListener('click', resetView);
+  document.getElementById('btn-fit').addEventListener('click', fitView);
+
+  // Initial view: fit to window
+  fitView();
+})();
+</script>
 </body>
 </html>`;
   fs.writeFileSync(path.join(outDir, "viewer.html"), html);
