@@ -18,6 +18,7 @@ import { getFlxEntryData } from "./flx";
 import { parseFixedItems, resolveMapItems, sortMapItems, REMORSE_MISSIONS, REBEL_BASE, REBEL_BASE_DESTROYED } from "./map";
 import { renderMap, renderShapeToPng } from "./renderer";
 import { parseShape } from "./shape";
+import { startServer } from "./server";
 
 const program = new Command();
 
@@ -446,6 +447,24 @@ program
       }
 
       console.log(`\nDone! Exported ${completed} maps to ${outputDir}/`);
+    } catch (err: any) {
+      console.error("Error:", err.message);
+      process.exit(1);
+    }
+  });
+
+// ── serve ─────────────────────────────────────────────────────
+program
+  .command("serve")
+  .description("Start a web server with a level picker UI and on-demand rendering")
+  .requiredOption("--input-data-dir <path>", "Path to Crusader game directory (containing STATIC/)")
+  .option("--port <number>", "Port to listen on", "3000")
+  .option("--cache-dir <path>", "Directory to cache rendered images", "cache")
+  .action((opts) => {
+    try {
+      const gd = loadGameData(opts.inputDataDir);
+      const port = parseInt(opts.port, 10);
+      startServer(gd, port, opts.cacheDir);
     } catch (err: any) {
       console.error("Error:", err.message);
       process.exit(1);

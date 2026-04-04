@@ -8,25 +8,28 @@
   },
   "scripts": {
     "build": "tsc",
-    "demo": "node dist/index.js render-level --input-data-dir=\"gog/Crusader No Remorse\" --level=1 --floor=0 --output=demo.png",   
-    "demoscaled": "node dist/index.js render-level --input-data-dir=\"gog/Crusader No Remorse\" --level=1 --floor=0 --output=scaled.png --scale 0.25",   
-    "shapes": "node dist/index.js dump-shapes --input-data-dir=\"gog/Crusader No Remorse\" --output-dir=shapes",   
-    "shapes1000": "node dist/index.js dump-shapes --input-data-dir=\"gog/Crusader No Remorse\" --output-dir=shapes --start=1000",   
+    "demo": "node dist/index.js render-level --input-data-dir=\"gog/Crusader No Remorse\" --level=1 --floor=0 --output=demo.png",
+    "demoscaled": "node dist/index.js render-level --input-data-dir=\"gog/Crusader No Remorse\" --level=1 --floor=0 --output=scaled.png --scale 0.25",
+    "shapes": "node dist/index.js dump-shapes --input-data-dir=\"gog/Crusader No Remorse\" --output-dir=shapes",
+    "shapes1000": "node dist/index.js dump-shapes --input-data-dir=\"gog/Crusader No Remorse\" --output-dir=shapes --start=1000",
     "info": "node dist/index.js info --input-data-dir=\"gog/Crusader No Remorse\"",
     "stats": "node dist/index.js render-level --input-data-dir=\"gog/Crusader No Remorse\" --level=1 --stats --scale 0.25 --output=stats.png",
     "nofloor": "node dist/index.js render-level --input-data-dir=\"gog/Crusader No Remorse\" --level=1 --output=nofloor.png --scale 0.25",
     "area-start": "node dist/index.js render-area --input-data-dir=\"gog/Crusader No Remorse\" --level=1 --x-min=5000 --x-max=9000 --y-min=5000 --y-max=9000 --output=area_start.png",
     "glob-test": "node dist/index.js render-glob --input-data-dir=\"gog/Crusader No Remorse\" --glob=0 --output=glob_test.png",
     "export-all": "node dist/index.js export-all --input-data-dir=\"gog/Crusader No Remorse\" --output-dir=exports --scale 0.25",
+    "serve": "node dist/index.js serve --input-data-dir=\"gog/Crusader No Remorse\"",
     "dev": "tsc --watch"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^25.3.3",
     "@types/sharp": "^0.32.0",
     "commander": "^14.0.3",
+    "express": "^5.2.1",
     "sharp": "^0.34.5",
     "typescript": "^5.9.3"
   }
