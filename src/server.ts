@@ -315,7 +315,24 @@ function getLandingPageHtml(): string {
   }
   #viewer-hud {
     position: absolute; bottom: 12px; right: 12px;
-    font-size: 11px; color: #0a0; opacity: 0.5;
+    font-size: 11px; color: #0a0; opacity: 0.8;
+    background: rgba(0, 0, 0, 0.7); padding: 8px 12px;
+    border-radius: 3px; border: 1px solid #1a3a1a;
+    font-family: 'Courier New', monospace; line-height: 1.4;
+    pointer-events: none; max-width: 400px;
+  }
+  #viewer-hud .coord-line {
+    margin: 2px 0;
+  }
+  #viewer-hud .coord-label {
+    color: #0a0; opacity: 0.7; display: inline-block; min-width: 80px;
+  }
+  #viewer-hud .coord-value {
+    color: #0f0; font-weight: bold;
+  }
+  #viewer-hud .copy-hint {
+    margin-top: 6px; padding-top: 6px; border-top: 1px solid #1a3a1a;
+    font-size: 10px; opacity: 0.5;
   }
 </style>
 </head>
@@ -596,10 +613,53 @@ function getLandingPageHtml(): string {
   let vZoom = 1, vPanX = 0, vPanY = 0;
   let viewerMode = 'image'; // 'image' or 'tiled'
   const V_MIN_ZOOM = 0.02, V_MAX_ZOOM = 10;
+  let vMouseX = 0, vMouseY = 0; // Current mouse world coordinates
+  let vImageOffsetX = 0, vImageOffsetY = 0; // Image offset in world space
 
   function applyViewerTransform() {
     vImg.style.transform = 'translate(' + vPanX + 'px,' + vPanY + 'px) scale(' + vZoom + ')';
     vZoomLabel.textContent = Math.round(vZoom * 100) + '%';
+    updateViewerHud();
+  }
+
+  function screenToWorld(screenX, screenY) {
+    // Convert screen coordinates to world coordinates
+    const worldX = (screenX - vPanX) / vZoom + vImageOffsetX;
+    const worldY = (screenY - vPanY) / vZoom + vImageOffsetY;
+    return { x: Math.round(worldX), y: Math.round(worldY) };
+  }
+
+  function updateViewerHud() {
+    if (viewerMode !== 'image') return;
+
+    const iw = vImg.naturalWidth || 0;
+    const ih = vImg.naturalHeight || 0;
+    if (iw === 0 || ih === 0) {
+      vHud.innerHTML = 'Loading...';
+      return;
+    }
+
+    // Calculate visible bounds in world coordinates
+    const topLeft = screenToWorld(0, 0);
+    const bottomRight = screenToWorld(vp.clientWidth, vp.clientHeight);
+
+    const scale = parseFloat(scaleSelect.value);
+    const worldMouseX = Math.round(vMouseX / scale);
+    const worldMouseY = Math.round(vMouseY / scale);
+
+    // Calculate viewport bounds
+    const viewX = Math.round(topLeft.x / scale);
+    const viewY = Math.round(topLeft.y / scale);
+    const viewWidth = Math.round((bottomRight.x - topLeft.x) / scale);
+    const viewHeight = Math.round((bottomRight.y - topLeft.y) / scale);
+
+    vHud.innerHTML =
+      '<div class="coord-line"><span class="coord-label">Image size:</span><span class="coord-value">' + iw + ' × ' + ih + 'px</span></div>' +
+      '<div class="coord-line"><span class="coord-label">Mouse:</span><span class="coord-value">x=' + worldMouseX + ', y=' + worldMouseY + '</span></div>' +
+      '<div class="coord-line"><span class="coord-label">Viewport:</span><span class="coord-value">' +
+        'x=' + viewX + ' y=' + viewY + ' width=' + viewWidth + ' height=' + viewHeight +
+      '</span></div>' +
+      '<div class="copy-hint">Use viewport coords with --x --y --width --height</div>';
   }
 
   function viewerZoomAt(cx, cy, factor) {
@@ -631,7 +691,7 @@ function getLandingPageHtml(): string {
       vImg.style.display = 'none';
       vIframe.style.display = 'block';
       vIframe.src = url;
-      vHud.textContent = 'Tiled render — zoom controls inside viewer';
+      vHud.innerHTML = '<div class="coord-line">Tiled render — zoom controls inside viewer</div><div class="copy-hint">Coordinates not available for tiled renders</div>';
       // Hide zoom controls (the iframe has its own)
       zoomControls.forEach(function(el) { if (el) el.style.display = 'none'; });
       vp.style.cursor = 'default';
@@ -642,8 +702,10 @@ function getLandingPageHtml(): string {
       vImg.style.display = 'block';
       vImg.src = url;
       vImg.onload = function() {
-        vHud.textContent = vImg.naturalWidth + '\\u00d7' + vImg.naturalHeight + 'px';
+        vImageOffsetX = 0;
+        vImageOffsetY = 0;
         viewerFit();
+        updateViewerHud();
       };
       zoomControls.forEach(function(el) { if (el) el.style.display = ''; });
       vp.style.cursor = 'grab';
@@ -677,9 +739,22 @@ function getLandingPageHtml(): string {
     vp.classList.add('dragging'); e.preventDefault();
   });
   window.addEventListener('mousemove', function(e) {
-    if (!vDragging) return;
-    vPanX = vPx + (e.clientX - vDx); vPanY = vPy + (e.clientY - vDy);
-    applyViewerTransform();
+    if (vDragging) {
+      vPanX = vPx + (e.clientX - vDx); vPanY = vPy + (e.clientY - vDy);
+      applyViewerTransform();
+    }
+  });
+
+  // Track mouse position for coordinate display
+  vp.addEventListener('mousemove', function(e) {
+    if (viewerMode !== 'image') return;
+    const rect = vp.getBoundingClientRect();
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
+    const world = screenToWorld(screenX, screenY);
+    vMouseX = world.x;
+    vMouseY = world.y;
+    updateViewerHud();
   });
   window.addEventListener('mouseup', function() { vDragging = false; vp.classList.remove('dragging'); });
 
