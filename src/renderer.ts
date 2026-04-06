@@ -33,6 +33,10 @@ export interface RenderOptions {
   onProgress?: (current: number, total: number) => void;
   /** Output file path (enables streaming for large images) */
   outputPath?: string;
+  /** Crop to a specific region in native (unscaled) screen-space pixels.
+   *  Coordinates are relative to the full map bounding box origin.
+   *  Only items overlapping this region are rendered. */
+  crop?: { x: number; y: number; width: number; height: number };
 }
 
 /** Shape cache to avoid re-parsing */
@@ -155,7 +159,7 @@ export async function renderMap(
   palette: Palette,
   options: RenderOptions = {}
 ): Promise<Buffer> {
-  const { bgColor, scale = 1, floorMinZ, floorMaxZ, onProgress, outputPath } = options;
+  const { bgColor, scale = 1, floorMinZ, floorMaxZ, onProgress, outputPath, crop } = options;
 
   const sortedItems = sortMapItems(items);
   const cache = createShapeCache();
@@ -186,22 +190,49 @@ export async function renderMap(
   const nativeWidth = maxX - minX;
   const nativeHeight = maxY - minY;
 
+  // Apply crop if specified (coordinates relative to full map bounding box)
+  let renderOffsetX = minX;
+  let renderOffsetY = minY;
+  let renderNativeW = nativeWidth;
+  let renderNativeH = nativeHeight;
+  let croppedResolved = resolved;
+
+  if (crop) {
+    renderOffsetX = minX + crop.x;
+    renderOffsetY = minY + crop.y;
+    renderNativeW = crop.width;
+    renderNativeH = crop.height;
+
+    // Filter to only items that overlap the crop rectangle
+    croppedResolved = resolved.filter(({ drawX, drawY, frame }) => {
+      const frameRight = drawX + frame.width;
+      const frameBottom = drawY + frame.height;
+      const cropRight = renderOffsetX + crop.width;
+      const cropBottom = renderOffsetY + crop.height;
+      return frameRight > renderOffsetX && drawX < cropRight &&
+             frameBottom > renderOffsetY && drawY < cropBottom;
+    });
+
+    console.log(`  Crop region: (${crop.x}, ${crop.y}) ${crop.width}×${crop.height}`);
+    console.log(`  Items in crop region: ${croppedResolved.length}`);
+  }
+
   // Scaled output dimensions
-  const imageWidth = Math.max(1, Math.ceil(nativeWidth * scale));
-  const imageHeight = Math.max(1, Math.ceil(nativeHeight * scale));
+  const imageWidth = Math.max(1, Math.ceil(renderNativeW * scale));
+  const imageHeight = Math.max(1, Math.ceil(renderNativeH * scale));
   const rawBytes = imageWidth * imageHeight * 4;
 
   console.log(`  Native dimensions: ${nativeWidth} × ${nativeHeight}`);
   console.log(`  Output dimensions: ${imageWidth} × ${imageHeight} (scale=${scale}, ${(rawBytes / 1024 / 1024).toFixed(0)} MB raw)`);
-  console.log(`  Sprites to render: ${resolved.length}`);
+  console.log(`  Sprites to render: ${croppedResolved.length}`);
 
   if (rawBytes <= MAX_SINGLE_IMAGE_BYTES) {
     // Fits in memory — single image
-    return renderDirect(resolved, imageWidth, imageHeight, minX, minY, scale, bgColor, onProgress);
+    return renderDirect(croppedResolved, imageWidth, imageHeight, renderOffsetX, renderOffsetY, scale, bgColor, onProgress);
   } else {
     // Too large — tiled output to folder
     const outDir = outputPath ? outputPath.replace(/\.[^.]+$/, "_tiles") : "out_tiles";
-    return renderTiledOutput(resolved, imageWidth, imageHeight, minX, minY, scale, bgColor, onProgress, outDir);
+    return renderTiledOutput(croppedResolved, imageWidth, imageHeight, renderOffsetX, renderOffsetY, scale, bgColor, onProgress, outDir);
   }
 }
 
@@ -238,7 +269,7 @@ async function renderDirect(
     }
   }
 
-  return sharp(imgBuf, { raw: { width: imageWidth, height: imageHeight, channels: 4 } })
+  return sharp(imgBuf, { raw: { width: imageWidth, height: imageHeight, channels: 4 }, limitInputPixels: false })
     .png({ compressionLevel: 6 })
     .toBuffer();
 }
@@ -411,7 +442,7 @@ function writeHtmlViewer(
     <button id="btn-reset" title="Reset (0)">Reset</button>
     <button id="btn-fit" title="Fit to window (F)">Fit</button>
   </div>
-  <div class="shortcuts">Scroll=zoom &middot; Drag=pan &middot; +/\u2212/0/F &middot; Arrows=pan</div>
+  <div class="shortcuts">Scroll=zoom &middot; Drag=pan &middot; +/\u2212/0/F &middot; Arrows=pan &middot; URL updates with position</div>
 </div>
 <div id="viewport">
   <div id="map-container"></div>
@@ -440,6 +471,37 @@ function writeHtmlViewer(
     container.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + zoom + ')';
     zoomLabel.textContent = Math.round(zoom * 100) + '%';
     updateVisibleTiles();
+    updateHash();
+  }
+
+  // URL hash: #x,y,zoom — map-space pixel coordinates of viewport center
+  let hashTimer = null;
+  function updateHash() {
+    clearTimeout(hashTimer);
+    hashTimer = setTimeout(function() {
+      const vw = viewport.clientWidth;
+      const vh = viewport.clientHeight;
+      // Center of viewport in map-space
+      const cx = Math.round((-panX + vw / 2) / zoom);
+      const cy = Math.round((-panY + vh / 2) / zoom);
+      const z = Math.round(zoom * 100);
+      history.replaceState(null, '', '#' + cx + ',' + cy + ',' + z);
+    }, 150);
+  }
+
+  function restoreFromHash() {
+    const h = location.hash.replace('#', '');
+    if (!h) return false;
+    const parts = h.split(',').map(Number);
+    if (parts.length < 2 || parts.some(isNaN)) return false;
+    const cx = parts[0], cy = parts[1];
+    const z = parts.length >= 3 ? parts[2] / 100 : 1;
+    zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
+    const vw = viewport.clientWidth;
+    const vh = viewport.clientHeight;
+    panX = -cx * zoom + vw / 2;
+    panY = -cy * zoom + vh / 2;
+    return true;
   }
 
   // Determine which tiles are visible and load/unload them
@@ -612,8 +674,12 @@ function writeHtmlViewer(
   document.getElementById('btn-reset').addEventListener('click', resetView);
   document.getElementById('btn-fit').addEventListener('click', fitView);
 
-  // Initial view: fit to window
-  fitView();
+  // Initial view: restore from URL hash, or fit to window
+  if (restoreFromHash()) {
+    applyTransform();
+  } else {
+    fitView();
+  }
 })();
 </script>
 </body>

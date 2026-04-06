@@ -129,6 +129,93 @@ program
     }
   });
 
+// ── render-area ───────────────────────────────────────────────
+program
+  .command("render-area")
+  .description("Render a cropped area of a level/mission map to a PNG image")
+  .requiredOption("--input-data-dir <path>", "Path to Crusader game directory (containing STATIC/)")
+  .requiredOption("--level <number>", "Level/mission number (1-15)")
+  .requiredOption("--x <number>", "Crop X offset in native pixels (from top-left of full map)")
+  .requiredOption("--y <number>", "Crop Y offset in native pixels")
+  .requiredOption("--width <number>", "Crop width in native pixels")
+  .requiredOption("--height <number>", "Crop height in native pixels")
+  .option("--floor <number>", "Floor number (filters by Z range)")
+  .option("--output <path>", "Output PNG file path", "area.png")
+  .option("--scale <number>", "Scale factor (default 1.0)", "1")
+  .option("--bg <color>", "Background color (hex)", "#000000")
+  .action(async (opts) => {
+    try {
+      const gd = loadGameData(opts.inputDataDir);
+
+      const levelNum = parseInt(opts.level, 10);
+      const mapIndices = REMORSE_MISSIONS[levelNum];
+      if (!mapIndices) {
+        console.error(`Unknown mission ${levelNum}. Valid missions: ${Object.keys(REMORSE_MISSIONS).join(", ")}`);
+        process.exit(1);
+      }
+
+      const allItems = [];
+      for (const idx of mapIndices) {
+        const mapData = getFlxEntryData(gd.fixedArchive, idx);
+        if (!mapData) continue;
+        const fixedItems = parseFixedItems(mapData);
+        const resolved = resolveMapItems(fixedItems, gd.globs, gd.typeFlags);
+        allItems.push(...resolved);
+      }
+
+      if (allItems.length === 0) {
+        console.error("No renderable items found.");
+        process.exit(1);
+      }
+
+      let floorMinZ: number | undefined;
+      let floorMaxZ: number | undefined;
+      if (opts.floor !== undefined) {
+        const floor = parseInt(opts.floor, 10);
+        floorMinZ = floor * 40;
+        floorMaxZ = (floor + 1) * 40 - 1;
+      }
+
+      const bgHex = opts.bg.replace("#", "");
+      const bgColor = {
+        r: parseInt(bgHex.substring(0, 2), 16),
+        g: parseInt(bgHex.substring(2, 4), 16),
+        b: parseInt(bgHex.substring(4, 6), 16),
+        a: 255,
+      };
+
+      const scaleVal = parseFloat(opts.scale);
+      const cropX = parseInt(opts.x, 10);
+      const cropY = parseInt(opts.y, 10);
+      const cropW = parseInt(opts.width, 10);
+      const cropH = parseInt(opts.height, 10);
+
+      console.log(`Rendering area from mission ${levelNum}: (${cropX},${cropY}) ${cropW}×${cropH} at scale ${scaleVal}...`);
+
+      const result = await renderMap(allItems, gd.shapesArchive, gd.palette, {
+        bgColor,
+        scale: scaleVal,
+        floorMinZ,
+        floorMaxZ,
+        outputPath: opts.output,
+        crop: { x: cropX, y: cropY, width: cropW, height: cropH },
+        onProgress: (current, total) => {
+          process.stdout.write(`\r  Progress: ${current}/${total} (${Math.round((current / total) * 100)}%)`);
+        },
+      });
+
+      process.stdout.write("\n");
+
+      if (result.toString() !== "TILED") {
+        fs.writeFileSync(opts.output, result);
+        console.log(`Output written to: ${opts.output}`);
+      }
+    } catch (err: any) {
+      console.error("Error:", err.message);
+      process.exit(1);
+    }
+  });
+
 // ── render-shape ──────────────────────────────────────────────
 program
   .command("render-shape")

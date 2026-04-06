@@ -61,9 +61,30 @@ export function startServer(gd: GameData, port: number, cacheDir: string): void 
     res.json(levels);
   });
 
+  // ── API: cached status ──
+  app.get("/api/cached", (req, res) => {
+    const scale = Math.max(0.05, Math.min(2, parseFloat(req.query.scale as string) || 0.25));
+    const floorParam = req.query.floor as string | undefined;
+    const floor = floorParam !== undefined && floorParam !== "" ? parseInt(floorParam, 10) : null;
+
+    const result: Record<string, { url: string; tiled: boolean }> = {};
+    for (const lv of levels) {
+      const key = cacheKey(lv.id, scale, floor);
+      const cachedPath = path.join(cacheDir, key);
+      const tiledDir = cachedPath.replace(/\.[^.]+$/, "_tiles");
+
+      if (fs.existsSync(cachedPath)) {
+        result[lv.id] = { url: `/cache/${key}`, tiled: false };
+      } else if (fs.existsSync(path.join(tiledDir, "viewer.html"))) {
+        result[lv.id] = { url: `/cache/${key.replace(/\.png$/, "_tiles/viewer.html")}`, tiled: true };
+      }
+    }
+    res.json(result);
+  });
+
   // ── API: render ──
   // Track in-flight renders to avoid duplicate work
-  const rendering = new Map<string, Promise<string>>();
+  const rendering = new Map<string, Promise<{ url: string; tiled: boolean }>>();
 
   app.get("/api/render/:levelId", async (req, res) => {
     const levelId = req.params.levelId;
@@ -79,18 +100,23 @@ export function startServer(gd: GameData, port: number, cacheDir: string): void 
 
     const key = cacheKey(levelId, scale, floor);
     const cachedPath = path.join(cacheDir, key);
+    const tiledDir = cachedPath.replace(/\.[^.]+$/, "_tiles");
 
-    // Serve from cache if it exists
+    // Serve from cache if it exists (single PNG or tiled directory)
     if (fs.existsSync(cachedPath)) {
       res.json({ status: "done", url: `/cache/${key}` });
+      return;
+    }
+    if (fs.existsSync(path.join(tiledDir, "viewer.html"))) {
+      res.json({ status: "done", url: `/cache/${key.replace(/\.png$/, "_tiles/viewer.html")}`, tiled: true });
       return;
     }
 
     // If already rendering, wait for it
     if (rendering.has(key)) {
       try {
-        const url = await rendering.get(key)!;
-        res.json({ status: "done", url });
+        const result = await rendering.get(key)!;
+        res.json({ status: "done", ...result });
       } catch (err: any) {
         res.status(500).json({ error: err.message });
       }
@@ -98,7 +124,7 @@ export function startServer(gd: GameData, port: number, cacheDir: string): void 
     }
 
     // Start render
-    const renderPromise = (async (): Promise<string> => {
+    const renderPromise = (async (): Promise<{ url: string; tiled: boolean }> => {
       const allItems: any[] = [];
       for (const idx of level.mapIndices) {
         const mapData = getFlxEntryData(gd.fixedArchive, idx);
@@ -136,21 +162,22 @@ export function startServer(gd: GameData, port: number, cacheDir: string): void 
 
       process.stdout.write("\n");
 
-      // If not tiled, write single PNG
+      // If not tiled, write single PNG; otherwise tiles + viewer.html already written
       if (result.toString() !== "TILED") {
         fs.writeFileSync(cachedPath, result);
+        console.log(`  \u2713 ${level.name} cached \u2192 ${key}`);
+        return { url: `/cache/${key}`, tiled: false };
+      } else {
+        console.log(`  \u2713 ${level.name} cached (tiled) \u2192 ${key.replace(/\.png$/, "_tiles/")}`);
+        return { url: `/cache/${key.replace(/\.png$/, "_tiles/viewer.html")}`, tiled: true };  
       }
-
-      console.log(`  ✓ ${level.name} cached → ${key}`);
-      const url = `/cache/${key}`;
-      return url;
     })();
 
     rendering.set(key, renderPromise);
 
     try {
-      const url = await renderPromise;
-      res.json({ status: "done", url });
+      const result = await renderPromise;
+      res.json({ status: "done", ...result });
     } catch (err: any) {
       console.error(`  ✗ ${level.name}: ${err.message}`);
       res.status(500).json({ error: err.message });
@@ -249,6 +276,13 @@ function getLandingPageHtml(): string {
     display: none;
   }
   .card .thumb .placeholder { font-size: 11px; color: #1a3a1a; }
+  .card .view-btn {
+    width: 100%; margin-top: 6px; padding: 4px 0; text-align: center;
+    background: #1a3a1a; color: #0f0; border: 1px solid #0f0;
+    font: 12px 'Courier New', monospace; border-radius: 3px; cursor: pointer;
+    text-transform: uppercase; letter-spacing: 1px;
+  }
+  .card .view-btn:hover { background: #0f0; color: #0a0a0a; }
 
   /* Viewer overlay */
   #viewer-overlay {
@@ -274,6 +308,10 @@ function getLandingPageHtml(): string {
   #viewer-img {
     position: absolute; transform-origin: 0 0;
     image-rendering: pixelated;
+  }
+  #viewer-iframe {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    border: none; display: none;
   }
   #viewer-hud {
     position: absolute; bottom: 12px; right: 12px;
@@ -335,6 +373,7 @@ function getLandingPageHtml(): string {
   </div>
   <div id="viewer-viewport">
     <img id="viewer-img" src="">
+    <iframe id="viewer-iframe"></iframe>
     <div id="viewer-hud"></div>
   </div>
 </div>
@@ -351,11 +390,35 @@ function getLandingPageHtml(): string {
   let levels = [];
   let selectedId = null;
   let rendering = false;
+  // Track rendered URLs: levelId -> { url, tiled }
+  const rendered = {};
 
-  // Fetch level list
+  // Fetch level list, then check cached status
   fetch('/api/levels').then(r => r.json()).then(data => {
     levels = data;
+    return loadCachedStatus();
+  }).then(() => {
     renderGrid();
+  });
+
+  function loadCachedStatus() {
+    const scale = scaleSelect.value;
+    const floor = floorSelect.value;
+    const qs = 'scale=' + scale + (floor !== '' ? '&floor=' + floor : '');
+    return fetch('/api/cached?' + qs).then(r => r.json()).then(data => {
+      // Merge into rendered map
+      for (const id in data) {
+        rendered[id] = data[id];
+      }
+    });
+  }
+
+  // Refresh cached status when scale/floor changes
+  scaleSelect.addEventListener('change', function() {
+    loadCachedStatus().then(renderGrid);
+  });
+  floorSelect.addEventListener('change', function() {
+    loadCachedStatus().then(renderGrid);
   });
 
   function renderGrid() {
@@ -363,12 +426,29 @@ function getLandingPageHtml(): string {
     for (const lv of levels) {
       const card = document.createElement('div');
       card.className = 'card' + (lv.id === selectedId ? ' active' : '');
+      const hasRender = rendered[lv.id];
       card.innerHTML = '<div class="name">' + esc(lv.name) + '</div>'
         + '<div class="meta">Maps: ' + lv.mapIndices.join(', ') + '</div>'
-        + '<div class="thumb"><img id="thumb-' + lv.id + '"><span class="placeholder">no render</span></div>';
-      card.addEventListener('click', function() { selectLevel(lv.id); });
+        + '<div class="thumb"><img id="thumb-' + lv.id + '"><span class="placeholder">' + (hasRender ? 'tiled render' : 'no render') + '</span></div>'
+        + (hasRender ? '<button class="view-btn" data-id="' + lv.id + '">View</button>' : '');
+      card.addEventListener('click', function(e) {
+        if (e.target.classList.contains('view-btn')) return;
+        selectLevel(lv.id);
+      });
       grid.appendChild(card);
     }
+    // Wire up view buttons
+    document.querySelectorAll('.view-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const id = btn.getAttribute('data-id');
+        const r = rendered[id];
+        if (r) {
+          const lv = levels.find(l => l.id === id);
+          openViewer(lv.name, r.url, r.tiled);
+        }
+      });
+    });
     refreshThumbs();
   }
 
@@ -404,15 +484,25 @@ function getLandingPageHtml(): string {
 
       setStatus('\\u2713 ' + esc(lv.name) + ' ready');
 
-      // Update thumbnail
-      const thumb = document.getElementById('thumb-' + levelId);
-      if (thumb) {
-        thumb.src = data.url + '?t=' + Date.now();
-        thumb.style.display = 'block';
-        thumb.parentElement.querySelector('.placeholder').style.display = 'none';
+      // Track render result
+      rendered[levelId] = { url: data.url, tiled: !!data.tiled };
+
+      // Update thumbnail (only for single-image renders)
+      if (!data.tiled) {
+        const thumb = document.getElementById('thumb-' + levelId);
+        if (thumb) {
+          thumb.src = data.url + '?t=' + Date.now();
+          thumb.style.display = 'block';
+          thumb.parentElement.querySelector('.placeholder').style.display = 'none';
+        }
       }
 
-      if (showViewer) openViewer(lv.name, data.url);
+      // Refresh grid to show View buttons
+      renderGrid();
+
+      if (showViewer) {
+        openViewer(lv.name, data.url, !!data.tiled);
+      }
     } catch (err) {
       setStatus('\\u2717 Error: ' + esc(err.message));
     } finally {
@@ -456,16 +546,20 @@ function getLandingPageHtml(): string {
         const resp = await fetch('/api/render/' + lv.id + '?' + qs);
         const data = await resp.json();
         if (resp.ok) {
-          const thumb = document.getElementById('thumb-' + lv.id);
-          if (thumb) {
-            thumb.src = data.url + '?t=' + Date.now();
-            thumb.style.display = 'block';
-            thumb.parentElement.querySelector('.placeholder').style.display = 'none';
+          rendered[lv.id] = { url: data.url, tiled: !!data.tiled };
+          if (!data.tiled) {
+            const thumb = document.getElementById('thumb-' + lv.id);
+            if (thumb) {
+              thumb.src = data.url + '?t=' + Date.now();
+              thumb.style.display = 'block';
+              thumb.parentElement.querySelector('.placeholder').style.display = 'none';
+            }
           }
         }
       } catch (e) { /* continue */ }
     }
     setStatus('\\u2713 All levels rendered!');
+    renderGrid();
     rendering = false;
     btnRender.disabled = !selectedId;
     btnRenderAll.disabled = false;
@@ -486,11 +580,21 @@ function getLandingPageHtml(): string {
   const overlay = document.getElementById('viewer-overlay');
   const vp = document.getElementById('viewer-viewport');
   const vImg = document.getElementById('viewer-img');
+  const vIframe = document.getElementById('viewer-iframe');
   const vTitle = document.getElementById('viewer-title');
   const vZoomLabel = document.getElementById('viewer-zoom');
   const vHud = document.getElementById('viewer-hud');
+  // Zoom control buttons container
+  const zoomControls = [
+    document.getElementById('viewer-zout'),
+    document.getElementById('viewer-zoom'),
+    document.getElementById('viewer-zin'),
+    document.getElementById('viewer-fit'),
+    document.getElementById('viewer-reset')
+  ];
 
   let vZoom = 1, vPanX = 0, vPanY = 0;
+  let viewerMode = 'image'; // 'image' or 'tiled'
   const V_MIN_ZOOM = 0.02, V_MAX_ZOOM = 10;
 
   function applyViewerTransform() {
@@ -520,18 +624,36 @@ function getLandingPageHtml(): string {
     applyViewerTransform();
   }
 
-  function openViewer(name, url) {
+  function openViewer(name, url, tiled) {
     vTitle.textContent = name;
-    vImg.src = url;
-    vImg.onload = function() {
-      vHud.textContent = vImg.naturalWidth + '\\u00d7' + vImg.naturalHeight + 'px';
-      viewerFit();
-    };
+    if (tiled) {
+      viewerMode = 'tiled';
+      vImg.style.display = 'none';
+      vIframe.style.display = 'block';
+      vIframe.src = url;
+      vHud.textContent = 'Tiled render — zoom controls inside viewer';
+      // Hide zoom controls (the iframe has its own)
+      zoomControls.forEach(function(el) { if (el) el.style.display = 'none'; });
+      vp.style.cursor = 'default';
+    } else {
+      viewerMode = 'image';
+      vIframe.style.display = 'none';
+      vIframe.src = '';
+      vImg.style.display = 'block';
+      vImg.src = url;
+      vImg.onload = function() {
+        vHud.textContent = vImg.naturalWidth + '\\u00d7' + vImg.naturalHeight + 'px';
+        viewerFit();
+      };
+      zoomControls.forEach(function(el) { if (el) el.style.display = ''; });
+      vp.style.cursor = 'grab';
+    }
     overlay.classList.add('visible');
   }
 
   document.getElementById('viewer-close').addEventListener('click', function() {
     overlay.classList.remove('visible');
+    vIframe.src = '';
   });
   document.getElementById('viewer-fit').addEventListener('click', viewerFit);
   document.getElementById('viewer-reset').addEventListener('click', function() {
@@ -541,6 +663,7 @@ function getLandingPageHtml(): string {
   document.getElementById('viewer-zout').addEventListener('click', function() { viewerZoomCenter(1 / 1.25); });
 
   vp.addEventListener('wheel', function(e) {
+    if (viewerMode !== 'image') return;
     e.preventDefault();
     const rect = vp.getBoundingClientRect();
     viewerZoomAt(e.clientX - rect.left, e.clientY - rect.top, e.deltaY < 0 ? 1.15 : 1 / 1.15);
@@ -548,6 +671,7 @@ function getLandingPageHtml(): string {
 
   let vDragging = false, vDx = 0, vDy = 0, vPx = 0, vPy = 0;
   vp.addEventListener('mousedown', function(e) {
+    if (viewerMode !== 'image') return;
     if (e.button !== 0) return;
     vDragging = true; vDx = e.clientX; vDy = e.clientY; vPx = vPanX; vPy = vPanY;
     vp.classList.add('dragging'); e.preventDefault();

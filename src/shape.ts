@@ -133,18 +133,10 @@ export function parseShape(data: Buffer, palette: Palette): Shape {
             const colorIdx = data[pos++];
             const color = palette[colorIdx] || { r: 0, g: 0, b: 0, a: 255 };
             const pixIdx = (row * width + x) * 4;
-            if (colorIdx === 0xff) {
-              // Transparent
-              pixels[pixIdx] = 0;
-              pixels[pixIdx + 1] = 0;
-              pixels[pixIdx + 2] = 0;
-              pixels[pixIdx + 3] = 0;
-            } else {
-              pixels[pixIdx] = color.r;
-              pixels[pixIdx + 1] = color.g;
-              pixels[pixIdx + 2] = color.b;
-              pixels[pixIdx + 3] = 255;
-            }
+            pixels[pixIdx] = color.r;
+            pixels[pixIdx + 1] = color.g;
+            pixels[pixIdx + 2] = color.b;
+            pixels[pixIdx + 3] = color.a;
           }
         } else {
           // RLE fill: read 1 pixel, repeat dlen times
@@ -153,17 +145,10 @@ export function parseShape(data: Buffer, palette: Palette): Shape {
           const color = palette[colorIdx] || { r: 0, g: 0, b: 0, a: 255 };
           for (let n = 0; n < dlen && x < width; n++, x++) {
             const pixIdx = (row * width + x) * 4;
-            if (colorIdx === 0xff) {
-              pixels[pixIdx] = 0;
-              pixels[pixIdx + 1] = 0;
-              pixels[pixIdx + 2] = 0;
-              pixels[pixIdx + 3] = 0;
-            } else {
-              pixels[pixIdx] = color.r;
-              pixels[pixIdx + 1] = color.g;
-              pixels[pixIdx + 2] = color.b;
-              pixels[pixIdx + 3] = 255;
-            }
+            pixels[pixIdx] = color.r;
+            pixels[pixIdx + 1] = color.g;
+            pixels[pixIdx + 2] = color.b;
+            pixels[pixIdx + 3] = color.a;
           }
         }
       }
