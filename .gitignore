@@ -6,3 +6,5 @@ node_modules
 .playwright-mcp
 *.png
 dist
+Slides/
+cache/
