@@ -12,9 +12,17 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import compression from "compression";
 import express from "express";
+import { errorMessage } from "./errors";
 import { getFlxEntryData } from "./flx";
 import type { GameData } from "./gamedata";
-import { parseFixedItems, REBEL_BASE, REBEL_BASE_DESTROYED, REMORSE_MISSIONS, resolveMapItems } from "./map";
+import {
+  type MapItem,
+  parseFixedItems,
+  REBEL_BASE,
+  REBEL_BASE_DESTROYED,
+  REMORSE_MISSIONS,
+  resolveMapItems,
+} from "./map";
 import { renderMap } from "./renderer";
 
 /** Level descriptor for the API */
@@ -143,15 +151,15 @@ export function startServer(gd: GameData, port: number, cacheDir: string): void 
       try {
         const result = await rendering.get(key)!;
         res.json({ status: "done", ...result });
-      } catch (err: any) {
-        res.status(500).json({ error: err.message });
+      } catch (err) {
+        res.status(500).json({ error: errorMessage(err) });
       }
       return;
     }
 
     // Start render
     const renderPromise = (async (): Promise<{ url: string; tiled: boolean }> => {
-      const allItems: any[] = [];
+      const allItems: MapItem[] = [];
       for (const idx of level.mapIndices) {
         const mapData = getFlxEntryData(gd.fixedArchive, idx);
         if (!mapData) continue;
@@ -209,9 +217,9 @@ export function startServer(gd: GameData, port: number, cacheDir: string): void 
     try {
       const result = await renderPromise;
       res.json({ status: "done", ...result });
-    } catch (err: any) {
-      console.error(`  \u2717 ${level.name}: ${err.message}`);
-      res.status(500).json({ error: err.message });
+    } catch (err) {
+      console.error(`  \u2717 ${level.name}: ${errorMessage(err)}`);
+      res.status(500).json({ error: errorMessage(err) });
     } finally {
       rendering.delete(key);
     }

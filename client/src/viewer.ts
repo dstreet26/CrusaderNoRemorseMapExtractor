@@ -1,3 +1,4 @@
+import { errorMessage } from "./errors";
 import {
   getSelectedFloors,
   levels,
@@ -104,11 +105,11 @@ async function refreshViewer() {
       viewerRefreshBtn.textContent = "Refresh";
       setStatus(`Error: ${data.error || "Render failed"}`);
     }
-  } catch (err: any) {
+  } catch (err) {
     if (viewerMode === "image") vImg.style.opacity = "1";
     viewerRefreshBtn.disabled = false;
     viewerRefreshBtn.textContent = "Refresh";
-    setStatus(`Error: ${err.message}`);
+    setStatus(`Error: ${errorMessage(err)}`);
   }
 }
 

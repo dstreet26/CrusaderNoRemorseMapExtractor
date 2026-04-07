@@ -13,6 +13,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { Command } from "commander";
+import { errorMessage } from "./errors";
 import { getFlxEntryData } from "./flx";
 import { loadGameData } from "./gamedata";
 import { parseFixedItems, REBEL_BASE, REBEL_BASE_DESTROYED, REMORSE_MISSIONS, resolveMapItems } from "./map";
@@ -123,8 +124,8 @@ program
         fs.writeFileSync(opts.output, result);
         console.log(`Output written to: ${opts.output}`);
       }
-    } catch (err: any) {
-      console.error("Error:", err.message);
+    } catch (err) {
+      console.error("Error:", errorMessage(err));
       process.exit(1);
     }
   });
@@ -212,8 +213,8 @@ program
         fs.writeFileSync(opts.output, result);
         console.log(`Output written to: ${opts.output}`);
       }
-    } catch (err: any) {
-      console.error("Error:", err.message);
+    } catch (err) {
+      console.error("Error:", errorMessage(err));
       process.exit(1);
     }
   });
@@ -263,8 +264,8 @@ program
           }
         }
       }
-    } catch (err: any) {
-      console.error("Error:", err.message);
+    } catch (err) {
+      console.error("Error:", errorMessage(err));
       process.exit(1);
     }
   });
@@ -311,8 +312,8 @@ program
       }
 
       console.log(`Dumped ${totalFrames} frames to ${outputDir}`);
-    } catch (err: any) {
-      console.error("Error:", err.message);
+    } catch (err) {
+      console.error("Error:", errorMessage(err));
       process.exit(1);
     }
   });
@@ -362,8 +363,8 @@ program
       console.log(`\n=== Type Flags Summary ===`);
       console.log(`  Drawable shapes: ${drawableShapes}`);
       console.log(`  Glob eggs: ${globEggs}`);
-    } catch (err: any) {
-      console.error("Error:", err.message);
+    } catch (err) {
+      console.error("Error:", errorMessage(err));
       process.exit(1);
     }
   });
@@ -439,8 +440,8 @@ program
         console.log(`  X: ${minX} - ${maxX}`);
         console.log(`  Y: ${minY} - ${maxY}`);
       }
-    } catch (err: any) {
-      console.error("Error:", err.message);
+    } catch (err) {
+      console.error("Error:", errorMessage(err));
       process.exit(1);
     }
   });
@@ -541,8 +542,8 @@ program
       }
 
       console.log(`\nDone! Exported ${completed} maps to ${outputDir}/`);
-    } catch (err: any) {
-      console.error("Error:", err.message);
+    } catch (err) {
+      console.error("Error:", errorMessage(err));
       process.exit(1);
     }
   });
@@ -559,8 +560,8 @@ program
       const gd = loadGameData(opts.inputDataDir);
       const port = parseInt(opts.port, 10);
       startServer(gd, port, opts.cacheDir);
-    } catch (err: any) {
-      console.error("Error:", err.message);
+    } catch (err) {
+      console.error("Error:", errorMessage(err));
       process.exit(1);
     }
   });

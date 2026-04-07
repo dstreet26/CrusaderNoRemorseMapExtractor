@@ -1,4 +1,5 @@
 import "./style.css";
+import { errorMessage } from "./errors";
 import { initViewer, openViewer, type RestoreState } from "./viewer";
 
 interface LevelInfo {
@@ -194,8 +195,8 @@ async function renderLevel(levelId: string, showViewer: boolean) {
     if (showViewer) {
       openViewer(lv.id, lv.name, data.url, !!data.tiled);
     }
-  } catch (err: any) {
-    setStatus(`\u2717 Error: ${esc(err.message)}`);
+  } catch (err) {
+    setStatus(`\u2717 Error: ${esc(errorMessage(err))}`);
   } finally {
     rendering = false;
     btnRender.disabled = !selectedId;

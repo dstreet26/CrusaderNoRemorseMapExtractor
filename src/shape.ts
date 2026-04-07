@@ -61,8 +61,6 @@ export function parseShape(data: Buffer, palette: Palette): Shape {
   }
 
   // Shape header: 6 bytes
-  // const maxX = data.readUInt16LE(0);
-  // const maxY = data.readUInt16LE(2);
   const frameCount = data.readUInt16LE(4);
 
   const frames: ShapeFrame[] = [];
@@ -73,7 +71,6 @@ export function parseShape(data: Buffer, palette: Palette): Shape {
     if (dirOffset + 8 > data.length) break;
 
     const frameOffset = data.readUInt32LE(dirOffset) & 0x7fffffff;
-    // const frameSize = data.readUInt32LE(dirOffset + 4);
 
     if (frameOffset + 28 > data.length) {
       frames.push({ width: 0, height: 0, xOffset: 0, yOffset: 0, compression: 0, pixels: Buffer.alloc(0) });
@@ -165,11 +162,4 @@ export function parseShape(data: Buffer, palette: Palette): Shape {
   }
 
   return { frameCount, frames };
-}
-
-/**
- * Render a single shape frame to a standalone RGBA buffer for debugging/visualization
- */
-export function renderFrameToRGBA(frame: ShapeFrame): { data: Buffer; width: number; height: number } {
-  return { data: frame.pixels, width: frame.width, height: frame.height };
 }
