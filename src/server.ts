@@ -39,9 +39,10 @@ function buildLevelList(): LevelInfo[] {
 }
 
 /** Generate a cache key filename for a given render request */
-function cacheKey(levelId: string, scale: number, floor: number | null): string {
+function cacheKey(levelId: string, scale: number, floor: number | null, showEditor: boolean): string {
   let key = `${levelId}_s${scale.toFixed(2).replace(".", "")}`;
   if (floor !== null) key += `_f${floor}`;
+  if (showEditor) key += "_editor";
   return key + ".png";
 }
 
@@ -74,10 +75,11 @@ export function startServer(gd: GameData, port: number, cacheDir: string): void 
     const scale = Math.max(0.05, Math.min(2, parseFloat(req.query.scale as string) || 0.25));
     const floorParam = req.query.floor as string | undefined;
     const floor = floorParam !== undefined && floorParam !== "" ? parseInt(floorParam, 10) : null;
+    const showEditor = req.query.showEditor === "true";
 
     const result: Record<string, { url: string; tiled: boolean }> = {};
     for (const lv of levels) {
-      const key = cacheKey(lv.id, scale, floor);
+      const key = cacheKey(lv.id, scale, floor, showEditor);
       const cachedPath = path.join(cacheDir, key);
       const tiledDir = cachedPath.replace(/\.[^.]+$/, "_tiles");
 
@@ -105,8 +107,9 @@ export function startServer(gd: GameData, port: number, cacheDir: string): void 
     const scale = Math.max(0.05, Math.min(2, parseFloat(req.query.scale as string) || 0.25));
     const floorParam = req.query.floor as string | undefined;
     const floor = floorParam !== undefined && floorParam !== "" ? parseInt(floorParam, 10) : null;
+    const showEditor = req.query.showEditor === "true";
 
-    const key = cacheKey(levelId, scale, floor);
+    const key = cacheKey(levelId, scale, floor, showEditor);
     const cachedPath = path.join(cacheDir, key);
     const tiledDir = cachedPath.replace(/\.[^.]+$/, "_tiles");
 
@@ -138,7 +141,7 @@ export function startServer(gd: GameData, port: number, cacheDir: string): void 
         const mapData = getFlxEntryData(gd.fixedArchive, idx);
         if (!mapData) continue;
         const fixedItems = parseFixedItems(mapData);
-        const resolved = resolveMapItems(fixedItems, gd.globs, gd.typeFlags, true);
+        const resolved = resolveMapItems(fixedItems, gd.globs, gd.typeFlags, !showEditor);
         allItems.push(...resolved);
       }
 
@@ -373,6 +376,13 @@ function getLandingPageHtml(): string {
     </select>
   </div>
   <div>
+    <label>Options</label><br>
+    <label style="font-weight:normal;cursor:pointer">
+      <input type="checkbox" id="show-editor" style="vertical-align:middle">
+      Show Editor Items
+    </label>
+  </div>
+  <div>
     <button id="btn-render" disabled>Select a level</button>
   </div>
   <div>
@@ -414,12 +424,24 @@ function getLandingPageHtml(): string {
   const btnRenderAll = document.getElementById('btn-render-all');
   const scaleSelect = document.getElementById('scale-select');
   const floorSelect = document.getElementById('floor-select');
+  const showEditorCheckbox = document.getElementById('show-editor');
 
   let levels = [];
   let selectedId = null;
   let rendering = false;
   // Track rendered URLs: levelId -> { url, tiled }
   const rendered = {};
+
+  // Helper: build query string from current UI state
+  function buildQueryString() {
+    const scale = scaleSelect.value;
+    const floor = floorSelect.value;
+    const showEditor = showEditorCheckbox.checked;
+    let qs = 'scale=' + scale;
+    if (floor !== '') qs += '&floor=' + floor;
+    if (showEditor) qs += '&showEditor=true';
+    return qs;
+  }
 
   // Fetch level list, then check cached status
   fetch('/api/levels').then(r => r.json()).then(data => {
@@ -430,9 +452,7 @@ function getLandingPageHtml(): string {
   });
 
   function loadCachedStatus() {
-    const scale = scaleSelect.value;
-    const floor = floorSelect.value;
-    const qs = 'scale=' + scale + (floor !== '' ? '&floor=' + floor : '');
+    const qs = buildQueryString();
     return fetch('/api/cached?' + qs).then(r => r.json()).then(data => {
       // Merge into rendered map
       for (const id in data) {
@@ -441,11 +461,14 @@ function getLandingPageHtml(): string {
     });
   }
 
-  // Refresh cached status when scale/floor changes
+  // Refresh cached status when scale/floor/editor changes
   scaleSelect.addEventListener('change', function() {
     loadCachedStatus().then(renderGrid);
   });
   floorSelect.addEventListener('change', function() {
+    loadCachedStatus().then(renderGrid);
+  });
+  showEditorCheckbox.addEventListener('change', function() {
     loadCachedStatus().then(renderGrid);
   });
 
@@ -495,10 +518,8 @@ function getLandingPageHtml(): string {
   function setStatus(html) { status.innerHTML = html; }
 
   async function renderLevel(levelId, showViewer) {
-    const scale = scaleSelect.value;
-    const floor = floorSelect.value;
     const lv = levels.find(l => l.id === levelId);
-    const qs = 'scale=' + scale + (floor !== '' ? '&floor=' + floor : '');
+    const qs = buildQueryString();
 
     setStatus('<span class="spinner"></span> Rendering ' + esc(lv.name) + ' ...');
     rendering = true;
@@ -541,12 +562,8 @@ function getLandingPageHtml(): string {
   }
 
   function refreshThumbs() {
-    const scale = scaleSelect.value;
-    const floor = floorSelect.value;
     // Just try loading each — if cached, the img loads; if not, it stays hidden
     for (const lv of levels) {
-      const qs = 'scale=' + scale + (floor !== '' ? '&floor=' + floor : '');
-      // Quick check via a HEAD-like fetch (just try loading the image)
       const thumb = document.getElementById('thumb-' + lv.id);
       if (!thumb) continue;
       // We don't know the cache key pattern on this end, so just try rendering endpoint
@@ -568,9 +585,7 @@ function getLandingPageHtml(): string {
       const lv = levels[i];
       setStatus('<span class="spinner"></span> [' + (i+1) + '/' + levels.length + '] Rendering ' + esc(lv.name) + ' ...');
       try {
-        const scale = scaleSelect.value;
-        const floor = floorSelect.value;
-        const qs = 'scale=' + scale + (floor !== '' ? '&floor=' + floor : '');
+        const qs = buildQueryString();
         const resp = await fetch('/api/render/' + lv.id + '?' + qs);
         const data = await resp.json();
         if (resp.ok) {
