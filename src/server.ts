@@ -424,6 +424,13 @@ function getLandingPageHtml(): string {
     <span id="zoom-sensitivity-value" style="opacity:0.6;min-width:30px;display:inline-block">1.0×</span>
     -->
     <span style="margin-left:15px;opacity:0.6">|</span>
+    <span style="margin-left:10px;opacity:0.6">Scale:</span>
+    <select id="viewer-scale" style="margin-left:5px">
+      <option value="0.1">0.1×</option>
+      <option value="0.25">0.25×</option>
+      <option value="0.5">0.5×</option>
+      <option value="1.0">1.0×</option>
+    </select>
     <label style="margin-left:10px;font-weight:normal;cursor:pointer;opacity:0.9">
       <input type="checkbox" id="viewer-show-editor" style="vertical-align:middle"> Editor
     </label>
@@ -469,11 +476,18 @@ function getLandingPageHtml(): string {
   // Track rendered URLs: levelId -> { url, tiled }
   const rendered = {};
 
+  const ALL_FLOORS = [0, 1, 2, 3, 4];
+
   // Helper: get selected floors from checkboxes
-  function getSelectedFloors() {
-    return Array.from(floorCheckboxes)
+  // Returns empty array if all floors are checked (equivalent to "all floors")
+  function getSelectedFloors(checkboxes) {
+    checkboxes = checkboxes || floorCheckboxes;
+    const selected = Array.from(checkboxes)
       .filter(cb => cb.checked)
       .map(cb => parseInt(cb.value, 10));
+    // All floors checked = no filter (same as none checked)
+    if (selected.length === ALL_FLOORS.length) return [];
+    return selected;
   }
 
   // Helper: build query string from current UI state
@@ -487,12 +501,88 @@ function getLandingPageHtml(): string {
     return qs;
   }
 
+  // URL State Management
+  function saveStateToURL() {
+    const params = new URLSearchParams();
+    if (selectedId) params.set('level', selectedId);
+    params.set('scale', scaleSelect.value);
+    const floors = getSelectedFloors();
+    if (floors.length > 0) params.set('floors', floors.join(','));
+    if (showEditorCheckbox.checked) params.set('editor', 'true');
+    window.history.replaceState(null, '', '#' + params.toString());
+  }
+
+  function loadStateFromURL() {
+    const hash = window.location.hash.slice(1);
+    if (!hash) return false;
+    const params = new URLSearchParams(hash);
+
+    // Restore scale
+    const scale = params.get('scale');
+    if (scale) scaleSelect.value = scale;
+
+    // Restore floors
+    const floors = params.get('floors');
+    if (floors) {
+      const floorNums = floors.split(',').map(Number);
+      floorCheckboxes.forEach(cb => {
+        cb.checked = floorNums.includes(parseInt(cb.value, 10));
+      });
+    }
+
+    // Restore editor checkbox
+    if (params.get('editor') === 'true') {
+      showEditorCheckbox.checked = true;
+    }
+
+    // Restore selected level
+    const levelId = params.get('level');
+    if (levelId) {
+      selectedId = levelId;
+      return levelId;
+    }
+
+    return false;
+  }
+
+  // Capture full URL state before anything overwrites it
+  let urlRestoreState = null;
+  (function() {
+    const hash = window.location.hash.slice(1);
+    if (!hash) return;
+    const params = new URLSearchParams(hash);
+    const levelId = params.get('level');
+    if (!levelId) return;
+    urlRestoreState = {
+      levelId: levelId,
+      zoom: parseFloat(params.get('zoom')),
+      panX: parseInt(params.get('panX'), 10),
+      panY: parseInt(params.get('panY'), 10),
+    };
+  })();
+
   // Fetch level list, then check cached status
   fetch('/api/levels').then(r => r.json()).then(data => {
     levels = data;
+
+    // Restore controls from URL (this may overwrite the hash via selectLevel)
+    const restoredLevelId = loadStateFromURL();
+    if (restoredLevelId) {
+      selectLevel(restoredLevelId);
+    }
+
     return loadCachedStatus();
   }).then(() => {
     renderGrid();
+
+    // Auto-open viewer if URL had a level and it's cached
+    if (urlRestoreState && rendered[urlRestoreState.levelId]) {
+      const r = urlRestoreState;
+      const lv = levels.find(l => l.id === r.levelId);
+      if (lv) {
+        openViewer(lv.id, lv.name, rendered[r.levelId].url, rendered[r.levelId].tiled, r);
+      }
+    }
   });
 
   function loadCachedStatus() {
@@ -507,14 +597,17 @@ function getLandingPageHtml(): string {
 
   // Refresh cached status when scale/floor/editor changes
   scaleSelect.addEventListener('change', function() {
+    saveStateToURL();
     loadCachedStatus().then(renderGrid);
   });
   floorCheckboxes.forEach(cb => {
     cb.addEventListener('change', function() {
+      saveStateToURL();
       loadCachedStatus().then(renderGrid);
     });
   });
   showEditorCheckbox.addEventListener('change', function() {
+    saveStateToURL();
     loadCachedStatus().then(renderGrid);
   });
 
@@ -522,6 +615,7 @@ function getLandingPageHtml(): string {
   btnFloorAll.addEventListener('click', function() {
     const allChecked = Array.from(floorCheckboxes).every(cb => cb.checked);
     floorCheckboxes.forEach(cb => cb.checked = !allChecked);
+    saveStateToURL();
     loadCachedStatus().then(renderGrid);
   });
 
@@ -566,6 +660,7 @@ function getLandingPageHtml(): string {
     const cards = document.querySelectorAll('.card');
     const idx = levels.findIndex(l => l.id === id);
     if (idx >= 0 && cards[idx]) cards[idx].classList.add('active');
+    saveStateToURL();
   }
 
   function setStatus(html) { status.innerHTML = html; }
@@ -713,6 +808,7 @@ function getLandingPageHtml(): string {
   */
 
   // Viewer controls
+  const viewerScale = document.getElementById('viewer-scale');
   const viewerShowEditor = document.getElementById('viewer-show-editor');
   const viewerFloorCheckboxes = document.querySelectorAll('.viewer-floor-checkbox');
   const viewerRefreshBtn = document.getElementById('viewer-refresh');
@@ -720,34 +816,35 @@ function getLandingPageHtml(): string {
 
   // Sync viewer controls with main controls when viewer opens
   function syncViewerControls() {
+    viewerScale.value = scaleSelect.value;
     viewerShowEditor.checked = showEditorCheckbox.checked;
     const selectedFloors = getSelectedFloors();
+    // If no specific floors selected, show all as checked
     viewerFloorCheckboxes.forEach(cb => {
-      cb.checked = selectedFloors.includes(parseInt(cb.value, 10));
+      if (selectedFloors.length === 0) {
+        cb.checked = true;
+      } else {
+        cb.checked = selectedFloors.includes(parseInt(cb.value, 10));
+      }
     });
   }
 
   // Refresh viewer with current settings
   async function refreshViewer() {
-    if (!currentViewerLevelId || viewerMode !== 'image') return;
+    if (!currentViewerLevelId) return;
 
-    // Build query string from viewer controls
-    const scale = scaleSelect.value;
-    const floors = Array.from(viewerFloorCheckboxes)
-      .filter(cb => cb.checked)
-      .map(cb => parseInt(cb.value, 10));
+    // Build query string from viewer controls (not main controls)
+    const scale = viewerScale.value;
+    const floors = getSelectedFloors(viewerFloorCheckboxes);
     const showEditor = viewerShowEditor.checked;
     let qs = 'scale=' + scale;
     if (floors.length > 0) qs += '&floors=' + floors.join(',');
     if (showEditor) qs += '&showEditor=true';
 
-    // Preserve zoom and pan
-    const oldZoom = vZoom;
-    const oldPanX = vPanX;
-    const oldPanY = vPanY;
-
     // Show loading state
-    vImg.style.opacity = '0.3';
+    if (viewerMode === 'image') {
+      vImg.style.opacity = '0.3';
+    }
     viewerRefreshBtn.disabled = true;
     viewerRefreshBtn.textContent = 'Rendering...';
     setStatus('<span class="spinner"></span> Rendering with new settings...');
@@ -758,56 +855,90 @@ function getLandingPageHtml(): string {
       const data = await resp.json();
 
       if (resp.ok) {
-        if (!data.tiled) {
-          // Update image
-          vImg.src = data.url + '?t=' + Date.now();
-          vImg.onload = function() {
-            // Restore zoom and pan
-            vZoom = oldZoom;
-            vPanX = oldPanX;
-            vPanY = oldPanY;
-            applyViewerTransform();
-            vImg.style.opacity = '1';
-            viewerRefreshBtn.disabled = false;
-            viewerRefreshBtn.textContent = 'Refresh';
-            setStatus('✓ View refreshed');
+        const lv = levels.find(l => l.id === currentViewerLevelId);
+        const name = lv ? lv.name : currentViewerLevelId;
 
-            // Update cached status
-            loadCachedStatus().then(renderGrid);
-          };
-          vImg.onerror = function() {
-            vImg.style.opacity = '1';
-            viewerRefreshBtn.disabled = false;
-            viewerRefreshBtn.textContent = 'Refresh';
-            setStatus('✗ Error loading image');
-          };
-        } else {
-          // Tiled render - would need to reload iframe
-          vImg.style.opacity = '1';
-          viewerRefreshBtn.disabled = false;
-          viewerRefreshBtn.textContent = 'Refresh';
-          setStatus('Tiled renders cannot be refreshed in-place. Close and reopen viewer.');
-        }
-      } else {
-        vImg.style.opacity = '1';
+        // Capture current viewer control state before openViewer resets them
+        const curScale = viewerScale.value;
+        const curEditor = viewerShowEditor.checked;
+        const curFloors = Array.from(viewerFloorCheckboxes).map(cb => cb.checked);
+
+        // Close current viewer and reopen with new result
+        overlay.classList.remove('visible');
+        openViewer(currentViewerLevelId, name, data.url, !!data.tiled);
+
+        // Restore viewer controls to what the user had set
+        viewerScale.value = curScale;
+        viewerShowEditor.checked = curEditor;
+        Array.from(viewerFloorCheckboxes).forEach((cb, i) => cb.checked = curFloors[i]);
+
+        // Update rendered cache and grid
+        rendered[currentViewerLevelId] = { url: data.url, tiled: !!data.tiled };
         viewerRefreshBtn.disabled = false;
         viewerRefreshBtn.textContent = 'Refresh';
-        setStatus('✗ Error: ' + (data.error || 'Render failed'));
+        setStatus('View refreshed');
+        saveViewerStateToURL();
+        loadCachedStatus().then(renderGrid);
+      } else {
+        if (viewerMode === 'image') vImg.style.opacity = '1';
+        viewerRefreshBtn.disabled = false;
+        viewerRefreshBtn.textContent = 'Refresh';
+        setStatus('Error: ' + (data.error || 'Render failed'));
       }
     } catch (err) {
-      vImg.style.opacity = '1';
+      if (viewerMode === 'image') vImg.style.opacity = '1';
       viewerRefreshBtn.disabled = false;
       viewerRefreshBtn.textContent = 'Refresh';
-      setStatus('✗ Error: ' + err.message);
+      setStatus('Error: ' + err.message);
     }
   }
 
   viewerRefreshBtn.addEventListener('click', refreshViewer);
 
+  // Keep URL in sync when viewer controls change (covers tiled mode too)
+  viewerScale.addEventListener('change', saveViewerStateToURL);
+  viewerShowEditor.addEventListener('change', saveViewerStateToURL);
+  viewerFloorCheckboxes.forEach(cb => cb.addEventListener('change', saveViewerStateToURL));
+
   function applyViewerTransform() {
     vImg.style.transform = 'translate(' + vPanX + 'px,' + vPanY + 'px) scale(' + vZoom + ')';
     vZoomLabel.textContent = Math.round(vZoom * 100) + '%';
     updateViewerHud();
+    saveViewerStateToURL();
+  }
+
+  function saveViewerStateToURL() {
+    if (!currentViewerLevelId) return;
+    const params = new URLSearchParams();
+    params.set('level', currentViewerLevelId);
+    params.set('scale', viewerScale.value);
+    const floors = getSelectedFloors(viewerFloorCheckboxes);
+    if (floors.length > 0) params.set('floors', floors.join(','));
+    if (viewerShowEditor.checked) params.set('editor', 'true');
+    // Only save zoom/pan for image mode (tiled mode has its own viewport)
+    if (viewerMode === 'image') {
+      params.set('zoom', vZoom.toFixed(2));
+      params.set('panX', Math.round(vPanX).toString());
+      params.set('panY', Math.round(vPanY).toString());
+    }
+    window.history.replaceState(null, '', '#' + params.toString());
+  }
+
+  function restoreViewerStateFromURL() {
+    const hash = window.location.hash.slice(1);
+    if (!hash) return;
+    const params = new URLSearchParams(hash);
+
+    const zoom = parseFloat(params.get('zoom') || '1');
+    const panX = parseInt(params.get('panX') || '0', 10);
+    const panY = parseInt(params.get('panY') || '0', 10);
+
+    if (!isNaN(zoom) && !isNaN(panX) && !isNaN(panY)) {
+      vZoom = zoom;
+      vPanX = panX;
+      vPanY = panY;
+      applyViewerTransform();
+    }
   }
 
   function screenToWorld(screenX, screenY) {
@@ -872,10 +1003,20 @@ function getLandingPageHtml(): string {
     applyViewerTransform();
   }
 
-  function openViewer(levelId, name, url, tiled) {
+  // restoreState: falsy for fresh open, or { zoom, panX, panY } to restore
+  function openViewer(levelId, name, url, tiled, restoreState) {
     currentViewerLevelId = levelId;
     syncViewerControls();
     vTitle.textContent = name;
+
+    // Extract saved zoom/pan if provided
+    let savedZoom = null, savedPanX = null, savedPanY = null;
+    if (restoreState && typeof restoreState === 'object') {
+      savedZoom = restoreState.zoom;
+      savedPanX = restoreState.panX;
+      savedPanY = restoreState.panY;
+    }
+
     if (tiled) {
       viewerMode = 'tiled';
       vImg.style.display = 'none';
@@ -894,7 +1035,18 @@ function getLandingPageHtml(): string {
       vImg.onload = function() {
         vImageOffsetX = 0;
         vImageOffsetY = 0;
+
+        // Always fit first (sets a sane baseline)
         viewerFit();
+
+        // Then override with saved URL state if we have it
+        if (savedZoom !== null && !isNaN(savedZoom) && !isNaN(savedPanX) && !isNaN(savedPanY)) {
+          vZoom = savedZoom;
+          vPanX = savedPanX;
+          vPanY = savedPanY;
+          applyViewerTransform();
+        }
+
         updateViewerHud();
       };
       zoomControls.forEach(function(el) { if (el) el.style.display = ''; });
