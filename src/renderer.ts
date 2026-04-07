@@ -359,7 +359,7 @@ async function renderTiledOutput(
         if (fMaxX <= tileX || fMinX >= tileX + tileW) continue;
         if (fMaxY <= tileY || fMinY >= tileY + tileH) continue;
 
-        blitFrameToTile(tileBuf, tileW, tileH, tileX, tileY, frame, nativeX, nativeY, scale);
+        blitFrame(tileBuf, tileW, tileH, frame, nativeX, nativeY, scale, tileX, tileY);
       }
 
       // Save tile as PNG
@@ -735,6 +735,8 @@ function blitFrame(
   nativeX: number,
   nativeY: number,
   scale: number,
+  offsetX = 0,
+  offsetY = 0,
 ): void {
   for (let row = 0; row < frame.height; row++) {
     for (let col = 0; col < frame.width; col++) {
@@ -743,11 +745,11 @@ function blitFrame(
 
       let px: number, py: number;
       if (scale === 1) {
-        px = nativeX + col;
-        py = nativeY + row;
+        px = nativeX + col - offsetX;
+        py = nativeY + row - offsetY;
       } else {
-        px = Math.floor((nativeX + col) * scale);
-        py = Math.floor((nativeY + row) * scale);
+        px = Math.floor((nativeX + col) * scale) - offsetX;
+        py = Math.floor((nativeY + row) * scale) - offsetY;
       }
 
       if (px < 0 || px >= imgWidth || py < 0 || py >= imgHeight) continue;
@@ -757,45 +759,6 @@ function blitFrame(
       imgBuf[dstIdx + 1] = frame.pixels[srcIdx + 1];
       imgBuf[dstIdx + 2] = frame.pixels[srcIdx + 2];
       imgBuf[dstIdx + 3] = 255;
-    }
-  }
-}
-
-/**
- * Blit a shape frame onto a tile buffer with tile-local coordinate offset.
- */
-function blitFrameToTile(
-  tileBuf: Buffer,
-  tileW: number,
-  tileH: number,
-  tileX: number,
-  tileY: number,
-  frame: ShapeFrame,
-  nativeX: number,
-  nativeY: number,
-  scale: number,
-): void {
-  for (let row = 0; row < frame.height; row++) {
-    for (let col = 0; col < frame.width; col++) {
-      const srcIdx = (row * frame.width + col) * 4;
-      if (frame.pixels[srcIdx + 3] === 0) continue;
-
-      let px: number, py: number;
-      if (scale === 1) {
-        px = nativeX + col - tileX;
-        py = nativeY + row - tileY;
-      } else {
-        px = Math.floor((nativeX + col) * scale) - tileX;
-        py = Math.floor((nativeY + row) * scale) - tileY;
-      }
-
-      if (px < 0 || px >= tileW || py < 0 || py >= tileH) continue;
-
-      const dstIdx = (py * tileW + px) * 4;
-      tileBuf[dstIdx] = frame.pixels[srcIdx];
-      tileBuf[dstIdx + 1] = frame.pixels[srcIdx + 1];
-      tileBuf[dstIdx + 2] = frame.pixels[srcIdx + 2];
-      tileBuf[dstIdx + 3] = 255;
     }
   }
 }

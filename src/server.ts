@@ -16,6 +16,7 @@ import { errorMessage } from "./errors";
 import { getFlxEntryData } from "./flx";
 import type { GameData } from "./gamedata";
 import {
+  computeFloorZRange,
   type MapItem,
   parseFixedItems,
   REBEL_BASE,
@@ -175,11 +176,8 @@ export function startServer(gd: GameData, port: number, cacheDir: string): void 
       let floorMinZ: number | undefined;
       let floorMaxZ: number | undefined;
       if (floors.length > 0) {
-        // Calculate min/max Z for selected floors
-        const minFloor = Math.min(...floors);
-        const maxFloor = Math.max(...floors);
-        floorMinZ = minFloor * 40;
-        floorMaxZ = (maxFloor + 1) * 40 - 1;
+        ({ floorMinZ } = computeFloorZRange(Math.min(...floors)));
+        ({ floorMaxZ } = computeFloorZRange(Math.max(...floors)));
       }
 
       console.log(

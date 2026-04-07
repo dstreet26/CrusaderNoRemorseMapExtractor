@@ -44,6 +44,19 @@ export function parsePalette(buf: Buffer): Palette {
 }
 
 /**
+ * Parse a hex color string (e.g. "#FF0000" or "FF0000") into a Color.
+ */
+export function parseHexColor(hex: string): Color {
+  const h = hex.replace("#", "");
+  return {
+    r: parseInt(h.substring(0, 2), 16),
+    g: parseInt(h.substring(2, 4), 16),
+    b: parseInt(h.substring(4, 6), 16),
+    a: 255,
+  };
+}
+
+/**
  * Hardcoded palette from the existing C++ leveldraw tool.
  * Values are 6-bit VGA (0-63). This serves as a fallback.
  */

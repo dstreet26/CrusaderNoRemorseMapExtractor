@@ -16,7 +16,15 @@ import { Command } from "commander";
 import { errorMessage } from "./errors";
 import { getFlxEntryData } from "./flx";
 import { loadGameData } from "./gamedata";
-import { parseFixedItems, REBEL_BASE, REBEL_BASE_DESTROYED, REMORSE_MISSIONS, resolveMapItems } from "./map";
+import {
+  computeFloorZRange,
+  parseFixedItems,
+  REBEL_BASE,
+  REBEL_BASE_DESTROYED,
+  REMORSE_MISSIONS,
+  resolveMapItems,
+} from "./map";
+import { parseHexColor } from "./palette";
 import { renderMap, renderShapeToPng } from "./renderer";
 import { startServer } from "./server";
 import { parseShape } from "./shape";
@@ -85,20 +93,12 @@ program
       let floorMaxZ: number | undefined;
       if (opts.floor !== undefined) {
         const floor = parseInt(opts.floor, 10);
-        // Each floor is roughly 40 Z units
-        floorMinZ = floor * 40;
-        floorMaxZ = (floor + 1) * 40 - 1;
+        ({ floorMinZ, floorMaxZ } = computeFloorZRange(floor));
         console.log(`Filtering to floor ${floor} (Z: ${floorMinZ}-${floorMaxZ})`);
       }
 
       // Parse background color
-      const bgHex = opts.bg.replace("#", "");
-      const bgColor = {
-        r: parseInt(bgHex.substring(0, 2), 16),
-        g: parseInt(bgHex.substring(2, 4), 16),
-        b: parseInt(bgHex.substring(4, 6), 16),
-        a: 255,
-      };
+      const bgColor = parseHexColor(opts.bg);
 
       const scaleVal = parseFloat(opts.scale);
       if (Number.isNaN(scaleVal) || scaleVal <= 0) {
@@ -172,18 +172,10 @@ program
       let floorMinZ: number | undefined;
       let floorMaxZ: number | undefined;
       if (opts.floor !== undefined) {
-        const floor = parseInt(opts.floor, 10);
-        floorMinZ = floor * 40;
-        floorMaxZ = (floor + 1) * 40 - 1;
+        ({ floorMinZ, floorMaxZ } = computeFloorZRange(parseInt(opts.floor, 10)));
       }
 
-      const bgHex = opts.bg.replace("#", "");
-      const bgColor = {
-        r: parseInt(bgHex.substring(0, 2), 16),
-        g: parseInt(bgHex.substring(2, 4), 16),
-        b: parseInt(bgHex.substring(4, 6), 16),
-        a: 255,
-      };
+      const bgColor = parseHexColor(opts.bg);
 
       const scaleVal = parseFloat(opts.scale);
       const cropX = parseInt(opts.x, 10);
@@ -467,20 +459,12 @@ program
         process.exit(1);
       }
 
-      const bgHex = opts.bg.replace("#", "");
-      const bgColor = {
-        r: parseInt(bgHex.substring(0, 2), 16),
-        g: parseInt(bgHex.substring(2, 4), 16),
-        b: parseInt(bgHex.substring(4, 6), 16),
-        a: 255,
-      };
+      const bgColor = parseHexColor(opts.bg);
 
       let floorMinZ: number | undefined;
       let floorMaxZ: number | undefined;
       if (opts.floor !== undefined) {
-        const floor = parseInt(opts.floor, 10);
-        floorMinZ = floor * 40;
-        floorMaxZ = (floor + 1) * 40 - 1;
+        ({ floorMinZ, floorMaxZ } = computeFloorZRange(parseInt(opts.floor, 10)));
       }
 
       // Build the list of renders: missions 1–15 + rebel base variants

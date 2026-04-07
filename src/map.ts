@@ -38,6 +38,11 @@ export interface Glob {
   items: GlobItem[];
 }
 
+/** Compute Z range for a given floor number (each floor is ~40 Z units). */
+export function computeFloorZRange(floor: number): { floorMinZ: number; floorMaxZ: number } {
+  return { floorMinZ: floor * 40, floorMaxZ: (floor + 1) * 40 - 1 };
+}
+
 /** Resolved map item ready for rendering */
 export interface MapItem {
   worldX: number;
