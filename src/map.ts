@@ -164,8 +164,8 @@ export function resolveMapItems(
   const items: MapItem[] = [];
 
   for (const fi of fixedItems) {
-    // Use raw usecode coords directly (NOT multiplied by 2).
-    // The C++ reference code passes entry.x, entry.y directly to drawShape.
+    // Use raw usecode coords (NOT multiplied by 2 like ScummVM's World_FromUsecodeXY).
+    // The isometric projection and glob expansion formulas account for this.
     const worldX = fi.x;
     const worldY = fi.y;
     const worldZ = fi.z;
@@ -182,12 +182,12 @@ export function resolveMapItems(
       if (globIdx < globs.length) {
         const glob = globs[globIdx];
         for (const gi of glob.items) {
-          // Crusader glob coordinate expansion (matching C++ reference):
-          // item_x = entry.x + glob_x * 2 - 512
-          // item_y = entry.y + glob_y * 2 - 512
-          // item_z = entry.z + glob_z
-          const itemX = worldX + gi.x * 2 - 512;
-          const itemY = worldY + gi.y * 2 - 512;
+          // Crusader glob coordinate expansion (matching ScummVM glob_egg.cpp:42-71):
+          // World space: itemx = (egg_x & ~0x3FF) + glob_x * 4 + 2
+          // We work in usecode space (no ×2), so equivalent formula:
+          //   itemx = (egg_uc_x & ~0x1FF) + glob_x * 2 + 1
+          const itemX = (worldX & ~0x1ff) + gi.x * 2 + 1;
+          const itemY = (worldY & ~0x1ff) + gi.y * 2 + 1;
           const itemZ = worldZ + gi.z;
 
           if (SKIP_SHAPES.has(gi.shape)) continue;

@@ -263,6 +263,52 @@ export async function renderMap(
 }
 
 /**
+ * Render a single tile region of the map.
+ * Both the direct and tiled rendering paths use this function to ensure identical output.
+ */
+function renderTile(
+  resolved: ResolvedRenderItem[],
+  tileW: number,
+  tileH: number,
+  tileX: number,
+  tileY: number,
+  offsetX: number,
+  offsetY: number,
+  scale: number,
+  bgColor: Color | undefined,
+): Buffer {
+  const tileBuf = Buffer.alloc(tileW * tileH * 4);
+
+  if (bgColor) {
+    for (let i = 0; i < tileW * tileH; i++) {
+      tileBuf[i * 4] = bgColor.r;
+      tileBuf[i * 4 + 1] = bgColor.g;
+      tileBuf[i * 4 + 2] = bgColor.b;
+      tileBuf[i * 4 + 3] = bgColor.a;
+    }
+  }
+
+  for (const { drawX, drawY, frame } of resolved) {
+    const nativeX = drawX - offsetX;
+    const nativeY = drawY - offsetY;
+
+    // Compute frame bounds in output (scaled) space
+    const fMinX = Math.floor(nativeX * scale);
+    const fMaxX = Math.ceil((nativeX + frame.width) * scale);
+    const fMinY = Math.floor(nativeY * scale);
+    const fMaxY = Math.ceil((nativeY + frame.height) * scale);
+
+    // Skip if frame doesn't overlap this tile
+    if (fMaxX <= tileX || fMinX >= tileX + tileW) continue;
+    if (fMaxY <= tileY || fMinY >= tileY + tileH) continue;
+
+    blitFrame(tileBuf, tileW, tileH, frame, nativeX, nativeY, scale, tileX, tileY);
+  }
+
+  return tileBuf;
+}
+
+/**
  * Direct rendering — fits in a single buffer, returns PNG.
  */
 async function renderDirect(
@@ -275,25 +321,9 @@ async function renderDirect(
   bgColor: Color | undefined,
   onProgress: ((current: number, total: number) => void) | undefined,
 ): Promise<Buffer> {
-  const imgBuf = Buffer.alloc(imageWidth * imageHeight * 4);
-
-  if (bgColor) {
-    for (let i = 0; i < imageWidth * imageHeight; i++) {
-      imgBuf[i * 4] = bgColor.r;
-      imgBuf[i * 4 + 1] = bgColor.g;
-      imgBuf[i * 4 + 2] = bgColor.b;
-      imgBuf[i * 4 + 3] = bgColor.a;
-    }
-  }
-
-  for (let i = 0; i < resolved.length; i++) {
-    const { drawX, drawY, frame } = resolved[i];
-    blitFrame(imgBuf, imageWidth, imageHeight, frame, drawX - offsetX, drawY - offsetY, scale);
-
-    if (onProgress && (i % 500 === 0 || i === resolved.length - 1)) {
-      onProgress(i + 1, resolved.length);
-    }
-  }
+  if (onProgress) onProgress(0, 1);
+  const imgBuf = renderTile(resolved, imageWidth, imageHeight, 0, 0, offsetX, offsetY, scale, bgColor);
+  if (onProgress) onProgress(1, 1);
 
   return sharp(imgBuf, { raw: { width: imageWidth, height: imageHeight, channels: 4 }, limitInputPixels: false })
     .png({ compressionLevel: 6 })
@@ -332,35 +362,7 @@ async function renderTiledOutput(
       const tileW = Math.min(TILE_SIZE, imageWidth - tileX);
       const tileH = Math.min(TILE_SIZE, imageHeight - tileY);
 
-      const tileBuf = Buffer.alloc(tileW * tileH * 4);
-
-      // Fill with background
-      if (bgColor) {
-        for (let i = 0; i < tileW * tileH; i++) {
-          tileBuf[i * 4] = bgColor.r;
-          tileBuf[i * 4 + 1] = bgColor.g;
-          tileBuf[i * 4 + 2] = bgColor.b;
-          tileBuf[i * 4 + 3] = bgColor.a;
-        }
-      }
-
-      // Render items that overlap this tile
-      for (const { drawX, drawY, frame } of resolved) {
-        const nativeX = drawX - offsetX;
-        const nativeY = drawY - offsetY;
-
-        // Compute frame bounds in output (scaled) space
-        const fMinX = Math.floor(nativeX * scale);
-        const fMaxX = Math.ceil((nativeX + frame.width) * scale);
-        const fMinY = Math.floor(nativeY * scale);
-        const fMaxY = Math.ceil((nativeY + frame.height) * scale);
-
-        // Skip if frame doesn't overlap this tile
-        if (fMaxX <= tileX || fMinX >= tileX + tileW) continue;
-        if (fMaxY <= tileY || fMinY >= tileY + tileH) continue;
-
-        blitFrame(tileBuf, tileW, tileH, frame, nativeX, nativeY, scale, tileX, tileY);
-      }
+      const tileBuf = renderTile(resolved, tileW, tileH, tileX, tileY, offsetX, offsetY, scale, bgColor);
 
       // Save tile as PNG
       const tileName = `tile_r${String(tr).padStart(3, "0")}_c${String(tc).padStart(3, "0")}.png`;
