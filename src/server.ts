@@ -9,6 +9,7 @@
  */
 
 import express from "express";
+import compression from "compression";
 import * as path from "path";
 import * as fs from "fs";
 import { type GameData } from "./gamedata";
@@ -53,8 +54,15 @@ export function startServer(gd: GameData, port: number, cacheDir: string): void 
 
   fs.mkdirSync(cacheDir, { recursive: true });
 
-  // Serve cached files
-  app.use("/cache", express.static(cacheDir));
+  // Enable gzip compression for all responses
+  app.use(compression());
+
+  // Serve cached files with aggressive caching headers
+  app.use("/cache", express.static(cacheDir, {
+    maxAge: '1y',  // Cache for 1 year
+    immutable: true,  // Files never change
+    etag: true,  // Enable ETags for validation
+  }));
 
   // ── API: level list ──
   app.get("/api/levels", (_req, res) => {
@@ -387,6 +395,9 @@ function getLandingPageHtml(): string {
     <button id="viewer-zin">+</button>
     <button id="viewer-fit">Fit</button>
     <button id="viewer-reset">1:1</button>
+    <span style="margin-left:15px;opacity:0.6">Zoom Sensitivity:</span>
+    <input type="range" id="zoom-sensitivity" min="0.3" max="2.0" step="0.1" value="1.0" style="width:80px;vertical-align:middle">
+    <span id="zoom-sensitivity-value" style="opacity:0.6;min-width:30px;display:inline-block">1.0×</span>
   </div>
   <div id="viewer-viewport">
     <img id="viewer-img" src="">
@@ -616,6 +627,19 @@ function getLandingPageHtml(): string {
   let vMouseX = 0, vMouseY = 0; // Current mouse world coordinates
   let vImageOffsetX = 0, vImageOffsetY = 0; // Image offset in world space
 
+  // Zoom sensitivity control
+  let zoomSensitivity = parseFloat(localStorage.getItem('zoomSensitivity') || '1.0');
+  const sensitivitySlider = document.getElementById('zoom-sensitivity');
+  const sensitivityValue = document.getElementById('zoom-sensitivity-value');
+  sensitivitySlider.value = zoomSensitivity.toString();
+  sensitivityValue.textContent = zoomSensitivity.toFixed(1) + '×';
+
+  sensitivitySlider.addEventListener('input', function() {
+    zoomSensitivity = parseFloat(this.value);
+    sensitivityValue.textContent = zoomSensitivity.toFixed(1) + '×';
+    localStorage.setItem('zoomSensitivity', zoomSensitivity.toString());
+  });
+
   function applyViewerTransform() {
     vImg.style.transform = 'translate(' + vPanX + 'px,' + vPanY + 'px) scale(' + vZoom + ')';
     vZoomLabel.textContent = Math.round(vZoom * 100) + '%';
@@ -728,7 +752,10 @@ function getLandingPageHtml(): string {
     if (viewerMode !== 'image') return;
     e.preventDefault();
     const rect = vp.getBoundingClientRect();
-    viewerZoomAt(e.clientX - rect.left, e.clientY - rect.top, e.deltaY < 0 ? 1.15 : 1 / 1.15);
+    // Apply zoom sensitivity: base zoom factor powered by sensitivity
+    const baseZoom = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    const effectiveZoom = Math.pow(baseZoom, zoomSensitivity);
+    viewerZoomAt(e.clientX - rect.left, e.clientY - rect.top, effectiveZoom);
   }, { passive: false });
 
   let vDragging = false, vDx = 0, vDy = 0, vPx = 0, vPy = 0;
