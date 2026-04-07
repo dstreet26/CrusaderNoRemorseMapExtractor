@@ -59,7 +59,11 @@ function loadStateFromURL(): string | false {
   const params = new URLSearchParams(hash);
 
   const scale = params.get("scale");
-  if (scale) scaleSelect.value = scale;
+  if (scale) {
+    // Normalize to match option values (e.g. "1.0" → "1", "0.25" stays "0.25")
+    const normalized = parseFloat(scale).toString();
+    scaleSelect.value = normalized;
+  }
 
   const floors = params.get("floors");
   if (floors) {
@@ -95,6 +99,9 @@ let urlRestoreState: (RestoreState & { levelId: string }) | null = null;
     zoom: parseFloat(params.get("zoom") || "NaN"),
     panX: parseInt(params.get("panX") || "NaN", 10),
     panY: parseInt(params.get("panY") || "NaN", 10),
+    cx: parseInt(params.get("cx") || "NaN", 10),
+    cy: parseInt(params.get("cy") || "NaN", 10),
+    tz: parseInt(params.get("tz") || "NaN", 10),
   };
 })();
 

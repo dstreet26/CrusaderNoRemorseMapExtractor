@@ -521,6 +521,10 @@ function writeHtmlViewer(
       const cy = Math.round((-panY + vh / 2) / zoom);
       const z = Math.round(zoom * 100);
       history.replaceState(null, '', '#' + cx + ',' + cy + ',' + z);
+      // Notify parent frame so it can persist viewport state in its URL
+      if (window.parent !== window) {
+        window.parent.postMessage({ type: 'tiledViewerState', cx: cx, cy: cy, z: z }, '*');
+      }
     }, 150);
   }
 

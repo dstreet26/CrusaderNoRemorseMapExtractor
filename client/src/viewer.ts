@@ -36,6 +36,11 @@ let vMouseX = 0,
 let vImageOffsetX = 0,
   vImageOffsetY = 0;
 
+// Tiled viewer viewport state (received via postMessage from iframe)
+let tiledCx = 0,
+  tiledCy = 0,
+  tiledZ = 100;
+
 const viewerScale = document.getElementById("viewer-scale") as HTMLSelectElement;
 const viewerShowEditor = document.getElementById("viewer-show-editor") as HTMLInputElement;
 const viewerFloorCheckboxes = document.querySelectorAll<HTMLInputElement>(".viewer-floor-checkbox");
@@ -132,6 +137,10 @@ export function saveViewerStateToURL() {
     params.set("zoom", vZoom.toFixed(2));
     params.set("panX", Math.round(vPanX).toString());
     params.set("panY", Math.round(vPanY).toString());
+  } else if (viewerMode === "tiled") {
+    params.set("cx", tiledCx.toString());
+    params.set("cy", tiledCy.toString());
+    params.set("tz", tiledZ.toString());
   }
   window.history.replaceState(null, "", `#${params.toString()}`);
 }
@@ -214,6 +223,10 @@ export interface RestoreState {
   zoom: number;
   panX: number;
   panY: number;
+  // Tiled viewer viewport (map-space center + zoom percentage)
+  cx: number;
+  cy: number;
+  tz: number;
 }
 
 export function openViewer(
@@ -240,7 +253,16 @@ export function openViewer(
     viewerMode = "tiled";
     vImg.style.display = "none";
     vIframe.style.display = "block";
-    vIframe.src = url;
+    // Append viewport hash if restoring from URL
+    if (restoreState && !Number.isNaN(restoreState.cx) && !Number.isNaN(restoreState.cy)) {
+      const tz = !Number.isNaN(restoreState.tz) ? restoreState.tz : 100;
+      vIframe.src = `${url}#${restoreState.cx},${restoreState.cy},${tz}`;
+      tiledCx = restoreState.cx;
+      tiledCy = restoreState.cy;
+      tiledZ = tz;
+    } else {
+      vIframe.src = url;
+    }
     vHud.innerHTML =
       '<div class="coord-line">Tiled render — zoom controls inside viewer</div><div class="copy-hint">Coordinates not available for tiled renders</div>';
     zoomControls.forEach((el) => {
@@ -275,6 +297,16 @@ export function openViewer(
 
 // Wire up event listeners
 export function initViewer() {
+  // Listen for tiled viewer iframe viewport state updates
+  window.addEventListener("message", (e) => {
+    if (e.data && e.data.type === "tiledViewerState") {
+      tiledCx = e.data.cx;
+      tiledCy = e.data.cy;
+      tiledZ = e.data.z;
+      saveViewerStateToURL();
+    }
+  });
+
   viewerRefreshBtn.addEventListener("click", refreshViewer);
 
   viewerScale.addEventListener("change", saveViewerStateToURL);
