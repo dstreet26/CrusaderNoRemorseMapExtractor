@@ -69,15 +69,9 @@ export function startServer(gd: GameData, port: number, cacheDir: string): void 
   // Enable gzip compression for all responses
   app.use(compression());
 
-  // Serve cached files with aggressive caching headers
-  app.use(
-    "/cache",
-    express.static(cacheDir, {
-      maxAge: "1y", // Cache for 1 year
-      immutable: true, // Files never change
-      etag: true, // Enable ETags for validation
-    }),
-  );
+  // Serve cached files
+  // TODO: revisit later or remove
+  app.use("/cache", express.static(cacheDir));
 
   // ── API: level list ──
   app.get("/api/levels", (_req, res) => {
