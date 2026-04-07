@@ -80,8 +80,8 @@ function getShapeFrame(
   const cached = cache.get(shapeIdx, frameIdx);
   if (cached) return cached;
 
-  // Shapes are 1-indexed in map data, 0-indexed in archive
-  const archiveIdx = shapeIdx - 1;
+  // Shape IDs map directly to archive indices (no offset per ScummVM source)
+  const archiveIdx = shapeIdx;
   const data = getFlxEntryData(shapesArchive, archiveIdx);
   if (!data) return null;
 

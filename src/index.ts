@@ -68,7 +68,7 @@ program
         }
         const fixedItems = parseFixedItems(mapData);
         console.log(`  Map ${idx}: ${fixedItems.length} fixed items`);
-        const resolved = resolveMapItems(fixedItems, gd.globs, gd.typeFlags);
+        const resolved = resolveMapItems(fixedItems, gd.globs, gd.typeFlags, true);
         allItems.push(...resolved);
       }
 
@@ -159,7 +159,7 @@ program
         const mapData = getFlxEntryData(gd.fixedArchive, idx);
         if (!mapData) continue;
         const fixedItems = parseFixedItems(mapData);
-        const resolved = resolveMapItems(fixedItems, gd.globs, gd.typeFlags);
+        const resolved = resolveMapItems(fixedItems, gd.globs, gd.typeFlags, true);
         allItems.push(...resolved);
       }
 
@@ -397,7 +397,7 @@ program
         }
 
         const fixedItems = parseFixedItems(mapData);
-        const resolved = resolveMapItems(fixedItems, gd.globs, gd.typeFlags);
+        const resolved = resolveMapItems(fixedItems, gd.globs, gd.typeFlags, true);
 
         console.log(`\n=== Map ${idx} ===`);
         console.log(`Raw fixed items: ${fixedItems.length}`);
@@ -502,7 +502,7 @@ program
             continue;
           }
           const fixedItems = parseFixedItems(mapData);
-          const resolved = resolveMapItems(fixedItems, gd.globs, gd.typeFlags);
+          const resolved = resolveMapItems(fixedItems, gd.globs, gd.typeFlags, true);
           allItems.push(...resolved);
         }
 

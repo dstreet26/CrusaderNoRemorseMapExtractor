@@ -130,7 +130,7 @@ export function startServer(gd: GameData, port: number, cacheDir: string): void 
         const mapData = getFlxEntryData(gd.fixedArchive, idx);
         if (!mapData) continue;
         const fixedItems = parseFixedItems(mapData);
-        const resolved = resolveMapItems(fixedItems, gd.globs, gd.typeFlags);
+        const resolved = resolveMapItems(fixedItems, gd.globs, gd.typeFlags, true);
         allItems.push(...resolved);
       }
 

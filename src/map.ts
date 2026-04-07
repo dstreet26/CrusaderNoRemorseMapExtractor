@@ -127,13 +127,13 @@ const SKIP_SHAPES = new Set([1592, 1593, 1594, 1608, 1609]);
  * @param fixedItems - Raw items from FIXED.DAT
  * @param globs - All parsed globs from GLOB.FLX
  * @param typeFlags - Shape metadata for family identification
- * @param skipNonDrawable - If true, skip items whose shape has draw=false
+ * @param skipEditorItems - If true, skip items whose shape has editor=true (non-game items)
  */
 export function resolveMapItems(
   fixedItems: FixedItem[],
   globs: Glob[],
   typeFlags: ShapeInfo[] | null,
-  skipNonDrawable: boolean = false
+  skipEditorItems: boolean = false
 ): MapItem[] {
   const items: MapItem[] = [];
 
@@ -164,7 +164,7 @@ export function resolveMapItems(
           const itemZ = worldZ + gi.z;
 
           if (SKIP_SHAPES.has(gi.shape)) continue;
-          if (skipNonDrawable && typeFlags && gi.shape < typeFlags.length && !typeFlags[gi.shape].draw) continue;
+          if (skipEditorItems && typeFlags && gi.shape < typeFlags.length && typeFlags[gi.shape].editor) continue;
 
           items.push({
             worldX: itemX,
@@ -177,7 +177,7 @@ export function resolveMapItems(
       }
     } else {
       if (SKIP_SHAPES.has(fi.shape)) continue;
-      if (skipNonDrawable && typeFlags && fi.shape < typeFlags.length && !typeFlags[fi.shape].draw) continue;
+      if (skipEditorItems && typeFlags && fi.shape < typeFlags.length && typeFlags[fi.shape].editor) continue;
 
       items.push({
         worldX,
