@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Crusader: No Remorse — Map Viewer</title>
+<link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+
+<header>
+  <h1>Crusader: No Remorse</h1>
+  <div class="sub">Map Viewer &amp; Extractor</div>
+</header>
+
+<div class="controls">
+  <div>
+    <label>Scale</label><br>
+    <select id="scale-select">
+      <option value="0.1">0.1×</option>
+      <option value="0.25" selected>0.25×</option>
+      <option value="0.5">0.5×</option>
+      <option value="1">1×</option>
+    </select>
+  </div>
+  <div>
+    <label>Floors</label><br>
+    <div style="display:flex;flex-direction:column;gap:2px">
+      <label style="font-weight:normal;cursor:pointer">
+        <input type="checkbox" class="floor-checkbox" value="0" style="vertical-align:middle"> Floor 0
+      </label>
+      <label style="font-weight:normal;cursor:pointer">
+        <input type="checkbox" class="floor-checkbox" value="1" style="vertical-align:middle"> Floor 1
+      </label>
+      <label style="font-weight:normal;cursor:pointer">
+        <input type="checkbox" class="floor-checkbox" value="2" style="vertical-align:middle"> Floor 2
+      </label>
+      <label style="font-weight:normal;cursor:pointer">
+        <input type="checkbox" class="floor-checkbox" value="3" style="vertical-align:middle"> Floor 3
+      </label>
+      <label style="font-weight:normal;cursor:pointer">
+        <input type="checkbox" class="floor-checkbox" value="4" style="vertical-align:middle"> Floor 4
+      </label>
+      <button id="floor-all" style="margin-top:3px;font-size:10px;padding:2px 5px">All</button>
+    </div>
+  </div>
+  <div>
+    <label>Options</label><br>
+    <label style="font-weight:normal;cursor:pointer">
+      <input type="checkbox" id="show-editor" style="vertical-align:middle">
+      Show Editor Items
+    </label>
+  </div>
+  <div>
+    <button id="btn-render" disabled>Select a level</button>
+  </div>
+  <div>
+    <button id="btn-render-all" title="Render all levels sequentially">Render All</button>
+  </div>
+</div>
+
+<div id="status"></div>
+
+<div class="grid" id="level-grid"></div>
+
+<!-- Image viewer overlay -->
+<div id="viewer-overlay">
+  <div id="viewer-bar">
+    <button id="viewer-close">✕ Close</button>
+    <span id="viewer-title"></span>
+    <span style="flex:1"></span>
+    <button id="viewer-zout">−</button>
+    <span id="viewer-zoom">100%</span>
+    <button id="viewer-zin">+</button>
+    <button id="viewer-fit">Fit</button>
+    <button id="viewer-reset">1:1</button>
+    <span style="margin-left:15px;opacity:0.6">|</span>
+    <span style="margin-left:10px;opacity:0.6">Scale:</span>
+    <select id="viewer-scale" style="margin-left:5px">
+      <option value="0.1">0.1×</option>
+      <option value="0.25">0.25×</option>
+      <option value="0.5">0.5×</option>
+      <option value="1.0">1.0×</option>
+    </select>
+    <label style="margin-left:10px;font-weight:normal;cursor:pointer;opacity:0.9">
+      <input type="checkbox" id="viewer-show-editor" style="vertical-align:middle"> Editor
+    </label>
+    <span style="margin-left:5px;opacity:0.6">Floors:</span>
+    <label style="margin-left:5px;font-weight:normal;cursor:pointer;opacity:0.9">
+      <input type="checkbox" class="viewer-floor-checkbox" value="0" style="vertical-align:middle"> 0
+    </label>
+    <label style="margin-left:5px;font-weight:normal;cursor:pointer;opacity:0.9">
+      <input type="checkbox" class="viewer-floor-checkbox" value="1" style="vertical-align:middle"> 1
+    </label>
+    <label style="margin-left:5px;font-weight:normal;cursor:pointer;opacity:0.9">
+      <input type="checkbox" class="viewer-floor-checkbox" value="2" style="vertical-align:middle"> 2
+    </label>
+    <label style="margin-left:5px;font-weight:normal;cursor:pointer;opacity:0.9">
+      <input type="checkbox" class="viewer-floor-checkbox" value="3" style="vertical-align:middle"> 3
+    </label>
+    <label style="margin-left:5px;font-weight:normal;cursor:pointer;opacity:0.9">
+      <input type="checkbox" class="viewer-floor-checkbox" value="4" style="vertical-align:middle"> 4
+    </label>
+    <button id="viewer-refresh" style="margin-left:10px">Refresh</button>
+  </div>
+  <div id="viewer-viewport">
+    <img id="viewer-img" src="">
+    <iframe id="viewer-iframe"></iframe>
+    <div id="viewer-hud"></div>
+  </div>
+</div>
+
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

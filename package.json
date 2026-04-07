@@ -7,8 +7,10 @@
     "crusader-map-extractor": "dist/index.js"
   },
   "scripts": {
-    "build": "tsc",
-    "clean": "rm -rf dist cache",
+    "build": "tsc && npm run build:client",
+    "build:server": "tsc",
+    "build:client": "cd client && npx vite build",
+    "clean": "rm -rf dist cache client/dist",
     "demo:overview": "node dist/index.js render-level --input-data-dir=\"gog/Crusader No Remorse\" --level=1 --scale 0.25 --output=demo_overview.png",
     "demo:zoomed": "node dist/index.js render-area --input-data-dir=\"gog/Crusader No Remorse\" --level=1 --x=13892 --y=13528 --width=4344 --height=2308 --output=demo_zoomed.png",
     "shapes": "node dist/index.js dump-shapes --input-data-dir=\"gog/Crusader No Remorse\" --output-dir=shapes",
@@ -18,23 +20,25 @@
     "glob-test": "node dist/index.js render-glob --input-data-dir=\"gog/Crusader No Remorse\" --glob=0 --output=glob_test.png",
     "export-all": "node dist/index.js export-all --input-data-dir=\"gog/Crusader No Remorse\" --output-dir=exports --scale 0.25",
     "serve": "node dist/index.js serve --input-data-dir=\"gog/Crusader No Remorse\"",
-    "dev": "tsc --watch"
+    "dev:server": "tsc --watch",
+    "dev:client": "cd client && npx vite"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@types/express": "^5.0.6",
-    "@types/node": "^25.3.3",
-    "@types/sharp": "^0.32.0",
     "commander": "^14.0.3",
     "compression": "^1.8.1",
     "express": "^5.2.1",
     "pngjs": "^7.0.0",
-    "sharp": "^0.34.5",
-    "typescript": "^5.9.3"
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
-    "@types/compression": "^1.8.1"
+    "@types/compression": "^1.8.1",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.3.3",
+    "@types/sharp": "^0.32.0",
+    "typescript": "^5.9.3",
+    "vite": "^6"
   }
 }

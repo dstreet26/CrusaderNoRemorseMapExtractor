@@ -1,0 +1,122 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0a0a0a; color: #0f0; font-family: 'Courier New', monospace;
+  display: flex; flex-direction: column; min-height: 100vh;
+}
+header {
+  padding: 24px 32px 16px; border-bottom: 1px solid #1a3a1a;
+  background: linear-gradient(180deg, #0d1a0d 0%, #0a0a0a 100%);
+}
+header h1 { font-size: 22px; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 4px; }
+header .sub { font-size: 12px; color: #0a0; opacity: 0.7; }
+.controls {
+  padding: 16px 32px; display: flex; gap: 16px; align-items: center;
+  border-bottom: 1px solid #1a3a1a; flex-wrap: wrap;
+}
+.controls label { font-size: 12px; color: #0a0; }
+.controls select, .controls input {
+  background: #111; color: #0f0; border: 1px solid #1a3a1a;
+  font: 13px 'Courier New', monospace; padding: 6px 10px;
+  border-radius: 3px; outline: none;
+}
+.controls select:focus, .controls input:focus { border-color: #0f0; }
+.controls select option { background: #111; }
+.controls button {
+  background: #1a3a1a; color: #0f0; border: 1px solid #0f0;
+  font: 13px 'Courier New', monospace; padding: 6px 16px;
+  border-radius: 3px; cursor: pointer; text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.controls button:hover { background: #0f0; color: #0a0a0a; }
+.controls button:disabled { opacity: 0.4; cursor: not-allowed; }
+#status {
+  padding: 8px 32px; font-size: 12px; color: #0a0;
+  min-height: 28px; display: flex; align-items: center; gap: 8px;
+}
+#status .spinner {
+  display: inline-block; width: 12px; height: 12px;
+  border: 2px solid #1a3a1a; border-top-color: #0f0;
+  border-radius: 50%; animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.grid {
+  flex: 1; padding: 16px 32px; display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px; align-content: start;
+}
+.card {
+  background: #111; border: 1px solid #1a3a1a; border-radius: 4px;
+  padding: 12px; cursor: pointer; transition: border-color 0.15s, background 0.15s;
+}
+.card:hover { border-color: #0f0; background: #0d1a0d; }
+.card.active { border-color: #0f0; background: #0d1a0d; }
+.card .name { font-size: 14px; margin-bottom: 4px; }
+.card .meta { font-size: 11px; color: #0a0; opacity: 0.6; }
+.card .thumb {
+  width: 100%; aspect-ratio: 16/9; background: #0a0a0a;
+  margin-top: 8px; border-radius: 2px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+}
+.card .thumb img {
+  max-width: 100%; max-height: 100%; image-rendering: pixelated;
+  display: none;
+}
+.card .thumb .placeholder { font-size: 11px; color: #1a3a1a; }
+.card .view-btn {
+  width: 100%; margin-top: 6px; padding: 4px 0; text-align: center;
+  background: #1a3a1a; color: #0f0; border: 1px solid #0f0;
+  font: 12px 'Courier New', monospace; border-radius: 3px; cursor: pointer;
+  text-transform: uppercase; letter-spacing: 1px;
+}
+.card .view-btn:hover { background: #0f0; color: #0a0a0a; }
+
+/* Viewer overlay */
+#viewer-overlay {
+  display: none; position: fixed; inset: 0; z-index: 1000;
+  background: #0a0a0a; flex-direction: column;
+}
+#viewer-overlay.visible { display: flex; }
+#viewer-bar {
+  padding: 8px 16px; display: flex; align-items: center; gap: 12px;
+  background: #0d1a0d; border-bottom: 1px solid #1a3a1a;
+  font-size: 13px;
+}
+#viewer-bar button {
+  background: #1a3a1a; color: #0f0; border: 1px solid #0f0;
+  font: 13px 'Courier New', monospace; padding: 4px 12px;
+  border-radius: 3px; cursor: pointer;
+}
+#viewer-bar button:hover { background: #0f0; color: #0a0a0a; }
+#viewer-viewport {
+  flex: 1; overflow: hidden; cursor: grab; position: relative;
+}
+#viewer-viewport.dragging { cursor: grabbing; }
+#viewer-img {
+  position: absolute; transform-origin: 0 0;
+  image-rendering: pixelated;
+}
+#viewer-iframe {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  border: none; display: none;
+}
+#viewer-hud {
+  position: absolute; bottom: 12px; right: 12px;
+  font-size: 11px; color: #0a0; opacity: 0.8;
+  background: rgba(0, 0, 0, 0.7); padding: 8px 12px;
+  border-radius: 3px; border: 1px solid #1a3a1a;
+  font-family: 'Courier New', monospace; line-height: 1.4;
+  pointer-events: none; max-width: 400px;
+}
+#viewer-hud .coord-line {
+  margin: 2px 0;
+}
+#viewer-hud .coord-label {
+  color: #0a0; opacity: 0.7; display: inline-block; min-width: 80px;
+}
+#viewer-hud .coord-value {
+  color: #0f0; font-weight: bold;
+}
+#viewer-hud .copy-hint {
+  margin-top: 6px; padding-top: 6px; border-top: 1px solid #1a3a1a;
+  font-size: 10px; opacity: 0.5;
+}
