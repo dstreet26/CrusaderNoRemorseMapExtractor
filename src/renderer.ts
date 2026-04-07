@@ -19,6 +19,7 @@ import { type Palette, type Color } from "./palette";
 import { type MapItem, sortMapItems } from "./map";
 import { parseShape, type Shape, type ShapeFrame } from "./shape";
 import { readFlx, getFlxEntryData, type FlxArchive } from "./flx";
+import { type ShapeInfo } from "./typeflag";
 
 /** Rendering options */
 export interface RenderOptions {
@@ -157,11 +158,12 @@ export async function renderMap(
   items: MapItem[],
   shapesArchive: FlxArchive,
   palette: Palette,
+  typeFlags: ShapeInfo[] | null,
   options: RenderOptions = {}
 ): Promise<Buffer> {
   const { bgColor, scale = 1, floorMinZ, floorMaxZ, onProgress, outputPath, crop } = options;
 
-  const sortedItems = sortMapItems(items);
+  const sortedItems = sortMapItems(items, typeFlags);
   const cache = createShapeCache();
 
   // Filter by floor if specified

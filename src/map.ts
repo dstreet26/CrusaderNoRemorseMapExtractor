@@ -47,6 +47,27 @@ export interface MapItem {
   frame: number;
 }
 
+/** Internal enriched item for advanced sorting (includes bounding box and flags) */
+interface SortableMapItem extends MapItem {
+  // 3D bounding box (world coordinates)
+  xLeft: number;    // worldX - xd
+  yFar: number;     // worldY - yd
+  zTop: number;     // worldZ + zd
+
+  // Cached shape metadata flags
+  sprite: boolean;
+  flat: boolean;
+  fbigsq: boolean;  // large flat square (xd == yd && xd >= 128)
+  solid: boolean;
+  draw: boolean;
+  occl: boolean;
+  trans: boolean;
+  anim: boolean;
+  roof: boolean;
+  land: boolean;
+  invitem: boolean;
+}
+
 /**
  * Parse fixed items from a FIXED.DAT entry (raw buffer of 16-byte records)
  */
@@ -193,16 +214,214 @@ export function resolveMapItems(
 }
 
 /**
- * Sort map items for painter's algorithm rendering (back-to-front).
- * Sort by Z ascending, then by (x+y) ascending for depth.
+ * Enrich a MapItem with bounding box and shape metadata for sorting.
+ * Based on ScummVM's SortItem initialization.
  */
-export function sortMapItems(items: MapItem[]): MapItem[] {
-  return items.slice().sort((a, b) => {
-    if (a.worldZ !== b.worldZ) return a.worldZ - b.worldZ;
-    const depthA = a.worldX + a.worldY;
-    const depthB = b.worldX + b.worldY;
-    return depthA - depthB;
+function enrichMapItem(
+  item: MapItem,
+  shapeInfo: ShapeInfo | null
+): SortableMapItem {
+  // Calculate footpad world dimensions (shape units to world coords)
+  // Per ScummVM: xd = footpad_x * 32, yd = footpad_y * 32, zd = footpad_z * 8
+  const xd = shapeInfo ? shapeInfo.x * 32 : 0;
+  const yd = shapeInfo ? shapeInfo.y * 32 : 0;
+  const zd = shapeInfo ? shapeInfo.z * 8 : 0;
+
+  // 3D bounding box (world coordinates)
+  const xLeft = item.worldX - xd;
+  const yFar = item.worldY - yd;
+  const zTop = item.worldZ + zd;
+
+  // Detect flags from shape metadata
+  const flat = zd === 0;
+  const fbigsq = xd === yd && xd >= 128;
+
+  return {
+    ...item,
+    xLeft,
+    yFar,
+    zTop,
+    sprite: false, // TODO: detect from extFlags if available
+    flat,
+    fbigsq,
+    solid: shapeInfo?.solid ?? false,
+    draw: shapeInfo?.draw ?? false,
+    occl: shapeInfo?.occluded ?? false,
+    trans: shapeInfo?.translucent ?? false,
+    anim: shapeInfo?.animType !== 0,
+    roof: shapeInfo?.roof ?? false,
+    land: shapeInfo?.land ?? false,
+    invitem: shapeInfo?.family === ShapeFamily.SF_CRUINVITEM,
+  };
+}
+
+/**
+ * Compare two items for painter's algorithm sorting.
+ * Returns true if item 'a' should be drawn before (below) item 'b'.
+ * Based on ScummVM's SortItem::below() method (sort_item.cpp:64-238).
+ */
+function below(a: SortableMapItem, b: SortableMapItem): boolean {
+  // Rule 1: Sprite separation (non-sprites before sprites)
+  if (a.sprite !== b.sprite) {
+    return a.sprite < b.sprite;
+  }
+
+  // Rule 2: Z-level checks
+  if (a.flat && b.flat) {
+    // Both flat: simple Z comparison
+    if (a.worldZ !== b.worldZ) {
+      return a.worldZ < b.worldZ;
+    }
+  } else if (a.invitem === b.invitem) {
+    // Non-flat or both same inventory status: bounding box check
+    // Lower item must be below top of upper item
+    if (a.zTop <= b.worldZ) return true;
+    if (a.worldZ >= b.zTop) return false;
+  }
+
+  // Rule 3: Y-axis spatial checks (depth in isometric)
+  const yFlat1 = a.yFar === a.worldY;
+  const yFlat2 = b.yFar === b.worldY;
+
+  if (yFlat1 && yFlat2) {
+    // Both Y-flat: compare with precision loss (32-unit quantization)
+    if (Math.floor(a.worldY / 32) !== Math.floor(b.worldY / 32)) {
+      return a.worldY < b.worldY;
+    }
+  } else {
+    // Bounding box overlap check
+    if (a.worldY <= b.yFar) return true;
+    if (a.yFar >= b.worldY) return false;
+  }
+
+  // Rule 4: X-axis spatial checks
+  const xFlat1 = a.xLeft === a.worldX;
+  const xFlat2 = b.xLeft === b.worldX;
+
+  if (xFlat1 && xFlat2) {
+    // Both X-flat: compare with precision loss
+    if (Math.floor(a.worldX / 32) !== Math.floor(b.worldX / 32)) {
+      return a.worldX < b.worldX;
+    }
+  } else {
+    // Bounding box overlap check
+    if (a.worldX <= b.xLeft) return true;
+    if (a.xLeft >= b.worldX) return false;
+  }
+
+  // Rule 5: Z-tolerance (8-unit overlap handling)
+  // Per ScummVM line 111-114: handle items that overlap in Z within tolerance
+  if (a.zTop - 8 <= b.worldZ && a.worldZ < b.zTop - 8) {
+    return true;
+  }
+  if (a.worldZ >= b.zTop - 8 && a.zTop - 8 > b.worldZ) {
+    return false;
+  }
+
+  // Rule 6: Flat-specific sorting rules (when either is flat)
+  if (a.flat || b.flat) {
+    // Lower z-bottom first
+    if (a.worldZ !== b.worldZ) {
+      return a.worldZ < b.worldZ;
+    }
+
+    // Inv items always after
+    if (a.invitem !== b.invitem) {
+      return a.invitem < b.invitem;
+    }
+
+    // Flat before non-flat
+    if (a.flat !== b.flat) {
+      return a.flat > b.flat;
+    }
+
+    // Translucent after opaque
+    if (a.trans !== b.trans) {
+      return a.trans < b.trans;
+    }
+
+    // Animated after static
+    if (a.anim !== b.anim) {
+      return a.anim < b.anim;
+    }
+
+    // Draw first
+    if (a.draw !== b.draw) {
+      return a.draw > b.draw;
+    }
+
+    // Solid first
+    if (a.solid !== b.solid) {
+      return a.solid > b.solid;
+    }
+
+    // Occluders first
+    if (a.occl !== b.occl) {
+      return a.occl > b.occl;
+    }
+
+    // Large flat squares first
+    if (a.fbigsq !== b.fbigsq) {
+      return a.fbigsq > b.fbigsq;
+    }
+  }
+
+  // Rule 7: Roof before non-roof
+  if (a.roof !== b.roof) {
+    return a.roof > b.roof;
+  }
+
+  // Rule 8: Z comparison fallback
+  if (a.worldZ !== b.worldZ) {
+    return a.worldZ < b.worldZ;
+  }
+
+  // Rule 9: Isometric depth (X+Y) fallback
+  const depthA = a.worldX + a.worldY;
+  const depthB = b.worldX + b.worldY;
+  if (depthA !== depthB) {
+    return depthA < depthB;
+  }
+
+  // Rule 10: Shape number for stability
+  if (a.shape !== b.shape) {
+    return a.shape < b.shape;
+  }
+
+  // Final: Frame number
+  return a.frame < b.frame;
+}
+
+/**
+ * Sort map items for painter's algorithm rendering (back-to-front).
+ * Uses comprehensive comparison based on ScummVM's sorting logic.
+ *
+ * @param items - Items to sort
+ * @param typeFlags - Shape metadata for bounding box and flag detection
+ */
+export function sortMapItems(
+  items: MapItem[],
+  typeFlags: ShapeInfo[] | null
+): MapItem[] {
+  // Enrich all items with bounding boxes and flags
+  const sortableItems = items.map((item) =>
+    enrichMapItem(
+      item,
+      typeFlags && item.shape < typeFlags.length
+        ? typeFlags[item.shape]
+        : null
+    )
+  );
+
+  // Sort using comprehensive comparison
+  sortableItems.sort((a, b) => {
+    if (below(a, b)) return -1;
+    if (below(b, a)) return 1;
+    return 0;
   });
+
+  // Return sorted items (SortableMapItem extends MapItem, safe to return)
+  return sortableItems;
 }
 
 /**

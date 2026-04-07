@@ -105,7 +105,7 @@ program
         process.exit(1);
       }
 
-      const result = await renderMap(allItems, gd.shapesArchive, gd.palette, {
+      const result = await renderMap(allItems, gd.shapesArchive, gd.palette, gd.typeFlags, {
         bgColor,
         scale: scaleVal,
         floorMinZ,
@@ -192,7 +192,7 @@ program
 
       console.log(`Rendering area from mission ${levelNum}: (${cropX},${cropY}) ${cropW}×${cropH} at scale ${scaleVal}...`);
 
-      const result = await renderMap(allItems, gd.shapesArchive, gd.palette, {
+      const result = await renderMap(allItems, gd.shapesArchive, gd.palette, gd.typeFlags, {
         bgColor,
         scale: scaleVal,
         floorMinZ,
@@ -512,7 +512,7 @@ program
           continue;
         }
 
-        const result = await renderMap(allItems, gd.shapesArchive, gd.palette, {
+        const result = await renderMap(allItems, gd.shapesArchive, gd.palette, gd.typeFlags, {
           bgColor,
           scale: scaleVal,
           floorMinZ,

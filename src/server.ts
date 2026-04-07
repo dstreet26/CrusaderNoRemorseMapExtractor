@@ -147,7 +147,7 @@ export function startServer(gd: GameData, port: number, cacheDir: string): void 
 
       console.log(`  Rendering ${level.name} (scale=${scale}, floor=${floor ?? "all"})...`);
 
-      const result = await renderMap(allItems, gd.shapesArchive, gd.palette, {
+      const result = await renderMap(allItems, gd.shapesArchive, gd.palette, gd.typeFlags, {
         bgColor: { r: 0, g: 0, b: 0, a: 255 },
         scale,
         floorMinZ,
