@@ -10,15 +10,15 @@
  *   node dist/index.js --input-data-dir=<path> --info
  */
 
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { Command } from "commander";
-import * as path from "path";
-import * as fs from "fs";
-import { loadGameData } from "./gamedata";
 import { getFlxEntryData } from "./flx";
-import { parseFixedItems, resolveMapItems, sortMapItems, REMORSE_MISSIONS, REBEL_BASE, REBEL_BASE_DESTROYED } from "./map";
+import { loadGameData } from "./gamedata";
+import { parseFixedItems, REBEL_BASE, REBEL_BASE_DESTROYED, REMORSE_MISSIONS, resolveMapItems } from "./map";
 import { renderMap, renderShapeToPng } from "./renderer";
-import { parseShape } from "./shape";
 import { startServer } from "./server";
+import { parseShape } from "./shape";
 
 const program = new Command();
 
@@ -100,7 +100,7 @@ program
       };
 
       const scaleVal = parseFloat(opts.scale);
-      if (isNaN(scaleVal) || scaleVal <= 0) {
+      if (Number.isNaN(scaleVal) || scaleVal <= 0) {
         console.error("Invalid --scale value. Must be a positive number.");
         process.exit(1);
       }
@@ -190,7 +190,9 @@ program
       const cropW = parseInt(opts.width, 10);
       const cropH = parseInt(opts.height, 10);
 
-      console.log(`Rendering area from mission ${levelNum}: (${cropX},${cropY}) ${cropW}×${cropH} at scale ${scaleVal}...`);
+      console.log(
+        `Rendering area from mission ${levelNum}: (${cropX},${cropY}) ${cropW}×${cropH} at scale ${scaleVal}...`,
+      );
 
       const result = await renderMap(allItems, gd.shapesArchive, gd.palette, gd.typeFlags, {
         bgColor,
@@ -423,7 +425,10 @@ program
         console.log(`\nUnique shapes used: ${shapeHist.size}`);
 
         // Coordinate range
-        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        let minX = Infinity,
+          maxX = -Infinity,
+          minY = Infinity,
+          maxY = -Infinity;
         for (const item of resolved) {
           if (item.worldX < minX) minX = item.worldX;
           if (item.worldX > maxX) maxX = item.worldX;
@@ -456,7 +461,7 @@ program
       fs.mkdirSync(outputDir, { recursive: true });
 
       const scaleVal = parseFloat(opts.scale);
-      if (isNaN(scaleVal) || scaleVal <= 0) {
+      if (Number.isNaN(scaleVal) || scaleVal <= 0) {
         console.error("Invalid --scale value. Must be a positive number.");
         process.exit(1);
       }
@@ -479,7 +484,9 @@ program
 
       // Build the list of renders: missions 1–15 + rebel base variants
       const jobs: { name: string; mapIndices: number[] }[] = [];
-      for (const missionNum of Object.keys(REMORSE_MISSIONS).map(Number).sort((a, b) => a - b)) {
+      for (const missionNum of Object.keys(REMORSE_MISSIONS)
+        .map(Number)
+        .sort((a, b) => a - b)) {
         const padded = String(missionNum).padStart(2, "0");
         jobs.push({ name: `Mission_${padded}`, mapIndices: REMORSE_MISSIONS[missionNum] });
       }

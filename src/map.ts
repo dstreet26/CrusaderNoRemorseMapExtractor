@@ -7,18 +7,18 @@
  * Glob eggs (shape family 3) reference prefab groups in GLOB.FLX.
  */
 
-import { readFlx, getFlxEntryData, type FlxArchive } from "./flx";
-import { type ShapeInfo, ShapeFamily } from "./typeflag";
+import { getFlxEntryData, readFlx } from "./flx";
+import { ShapeFamily, type ShapeInfo } from "./typeflag";
 
 /** Raw fixed item as stored in FIXED.DAT */
 export interface FixedItem {
-  x: number;        // usecode X (multiply by 2 for world coords)
-  y: number;        // usecode Y
-  z: number;        // world Z
-  shape: number;    // shape index
-  frame: number;    // frame index
+  x: number; // usecode X (multiply by 2 for world coords)
+  y: number; // usecode Y
+  z: number; // world Z
+  shape: number; // shape index
+  frame: number; // frame index
   flags: number;
-  quality: number;  // for glob eggs: glob index in GLOB.FLX
+  quality: number; // for glob eggs: glob index in GLOB.FLX
   npcNum: number;
   mapNum: number;
   next: number;
@@ -26,7 +26,7 @@ export interface FixedItem {
 
 /** Glob entry (sub-item within a glob prefab) */
 export interface GlobItem {
-  x: number;  // local offset
+  x: number; // local offset
   y: number;
   z: number;
   shape: number;
@@ -50,14 +50,14 @@ export interface MapItem {
 /** Internal enriched item for advanced sorting (includes bounding box and flags) */
 interface SortableMapItem extends MapItem {
   // 3D bounding box (world coordinates)
-  xLeft: number;    // worldX - xd
-  yFar: number;     // worldY - yd
-  zTop: number;     // worldZ + zd
+  xLeft: number; // worldX - xd
+  yFar: number; // worldY - yd
+  zTop: number; // worldZ + zd
 
   // Cached shape metadata flags
   sprite: boolean;
   flat: boolean;
-  fbigsq: boolean;  // large flat square (xd == yd && xd >= 128)
+  fbigsq: boolean; // large flat square (xd == yd && xd >= 128)
   solid: boolean;
   draw: boolean;
   occl: boolean;
@@ -154,7 +154,7 @@ export function resolveMapItems(
   fixedItems: FixedItem[],
   globs: Glob[],
   typeFlags: ShapeInfo[] | null,
-  skipEditorItems: boolean = false
+  skipEditorItems: boolean = false,
 ): MapItem[] {
   const items: MapItem[] = [];
 
@@ -168,7 +168,8 @@ export function resolveMapItems(
     // Check if this is a glob egg
     // The original C++ code checks `type == 0x10` which corresponds to shape 16.
     // ScummVM checks family == SF_GLOBEGG. We support both.
-    const isGlobEgg = fi.shape === 0x10 ||
+    const isGlobEgg =
+      fi.shape === 0x10 ||
       (typeFlags && fi.shape < typeFlags.length && typeFlags[fi.shape].family === ShapeFamily.SF_GLOBEGG);
 
     if (isGlobEgg) {
@@ -217,10 +218,7 @@ export function resolveMapItems(
  * Enrich a MapItem with bounding box and shape metadata for sorting.
  * Based on ScummVM's SortItem initialization.
  */
-function enrichMapItem(
-  item: MapItem,
-  shapeInfo: ShapeInfo | null
-): SortableMapItem {
+function enrichMapItem(item: MapItem, shapeInfo: ShapeInfo | null): SortableMapItem {
   // Calculate footpad world dimensions (shape units to world coords)
   // Per ScummVM: xd = footpad_x * 32, yd = footpad_y * 32, zd = footpad_z * 8
   const xd = shapeInfo ? shapeInfo.x * 32 : 0;
@@ -399,18 +397,10 @@ function below(a: SortableMapItem, b: SortableMapItem): boolean {
  * @param items - Items to sort
  * @param typeFlags - Shape metadata for bounding box and flag detection
  */
-export function sortMapItems(
-  items: MapItem[],
-  typeFlags: ShapeInfo[] | null
-): MapItem[] {
+export function sortMapItems(items: MapItem[], typeFlags: ShapeInfo[] | null): MapItem[] {
   // Enrich all items with bounding boxes and flags
   const sortableItems = items.map((item) =>
-    enrichMapItem(
-      item,
-      typeFlags && item.shape < typeFlags.length
-        ? typeFlags[item.shape]
-        : null
-    )
+    enrichMapItem(item, typeFlags && item.shape < typeFlags.length ? typeFlags[item.shape] : null),
   );
 
   // Sort using comprehensive comparison

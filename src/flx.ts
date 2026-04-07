@@ -12,7 +12,7 @@
  *   0x80+:        index table — 8 bytes per entry (offset:u32, size:u32)
  */
 
-import * as fs from "fs";
+import * as fs from "node:fs";
 
 const FLEX_TABLE_OFFSET = 0x80;
 

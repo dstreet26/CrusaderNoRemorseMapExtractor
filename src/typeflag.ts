@@ -5,7 +5,7 @@
  * Crusader uses 9 bytes per entry (vs 8 for Ultima 8).
  */
 
-import * as fs from "fs";
+import * as fs from "node:fs";
 
 export enum ShapeFamily {
   SF_GENERIC = 0,
@@ -103,7 +103,7 @@ export function parseTypeFlags(buf: Buffer): ShapeInfo[] {
     const translucent = !!(d[1] & 0x08);
 
     // Family: 5 bits spanning bytes 1-2
-    const family: ShapeFamily = ((d[1] >> 4) | ((d[2] & 1) << 4));
+    const family: ShapeFamily = (d[1] >> 4) | ((d[2] & 1) << 4);
 
     // Equip type: 4 bits in byte 2
     const equipType = (d[2] >> 1) & 0x0f;
@@ -135,13 +135,34 @@ export function parseTypeFlags(buf: Buffer): ShapeInfo[] {
     const volume = d[8];
 
     infos.push({
-      fixed, solid, sea, land, occluded, bag, damaging, noisy,
-      draw, ignore, roof, translucent,
-      editor, selectable, preload, sound, targetable, npc,
-      family, equipType,
-      x, y, z,
-      animType, animData, animSpeed,
-      weight, volume,
+      fixed,
+      solid,
+      sea,
+      land,
+      occluded,
+      bag,
+      damaging,
+      noisy,
+      draw,
+      ignore,
+      roof,
+      translucent,
+      editor,
+      selectable,
+      preload,
+      sound,
+      targetable,
+      npc,
+      family,
+      equipType,
+      x,
+      y,
+      z,
+      animType,
+      animData,
+      animSpeed,
+      weight,
+      volume,
     });
   }
 

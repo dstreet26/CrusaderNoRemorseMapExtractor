@@ -35,12 +35,12 @@
  *     6. Goto 1
  */
 
-import { type Palette, type Color } from "./palette";
+import type { Palette } from "./palette";
 
 export interface ShapeFrame {
   width: number;
   height: number;
-  xOffset: number;  // hotspot offset
+  xOffset: number; // hotspot offset
   yOffset: number;
   compression: number;
   /** Decoded RGBA pixel data (width × height × 4 bytes) */

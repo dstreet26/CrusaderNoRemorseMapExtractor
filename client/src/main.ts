@@ -36,8 +36,8 @@ function buildQueryString(): string {
   const scale = scaleSelect.value;
   const floors = getSelectedFloors();
   const showEditor = showEditorCheckbox.checked;
-  let qs = "scale=" + scale;
-  if (floors.length > 0) qs += "&floors=" + floors.join(",");
+  let qs = `scale=${scale}`;
+  if (floors.length > 0) qs += `&floors=${floors.join(",")}`;
   if (showEditor) qs += "&showEditor=true";
   return qs;
 }
@@ -49,7 +49,7 @@ function saveStateToURL() {
   const floors = getSelectedFloors();
   if (floors.length > 0) params.set("floors", floors.join(","));
   if (showEditorCheckbox.checked) params.set("editor", "true");
-  window.history.replaceState(null, "", "#" + params.toString());
+  window.history.replaceState(null, "", `#${params.toString()}`);
 }
 
 function loadStateFromURL(): string | false {
@@ -83,7 +83,7 @@ function loadStateFromURL(): string | false {
 
 // Capture full URL state before anything overwrites it
 let urlRestoreState: (RestoreState & { levelId: string }) | null = null;
-(function () {
+(() => {
   const hash = window.location.hash.slice(1);
   if (!hash) return;
   const params = new URLSearchParams(hash);
@@ -99,7 +99,7 @@ let urlRestoreState: (RestoreState & { levelId: string }) | null = null;
 
 export function loadCachedStatus(): Promise<void> {
   const qs = buildQueryString();
-  return fetch("/api/cached?" + qs)
+  return fetch(`/api/cached?${qs}`)
     .then((r) => r.json())
     .then((data) => {
       for (const id in data) {
@@ -116,13 +116,21 @@ export function renderGrid() {
   grid.innerHTML = "";
   for (const lv of levels) {
     const card = document.createElement("div");
-    card.className = "card" + (lv.id === selectedId ? " active" : "");
+    card.className = `card${lv.id === selectedId ? " active" : ""}`;
     const hasRender = rendered[lv.id];
     card.innerHTML =
-      '<div class="name">' + esc(lv.name) + "</div>" +
-      '<div class="meta">Maps: ' + lv.mapIndices.join(", ") + "</div>" +
-      '<div class="thumb"><img id="thumb-' + lv.id + '"><span class="placeholder">' + (hasRender ? "tiled render" : "no render") + "</span></div>" +
-      (hasRender ? '<button class="view-btn" data-id="' + lv.id + '">View</button>' : "");
+      '<div class="name">' +
+      esc(lv.name) +
+      "</div>" +
+      '<div class="meta">Maps: ' +
+      lv.mapIndices.join(", ") +
+      "</div>" +
+      '<div class="thumb"><img id="thumb-' +
+      lv.id +
+      '"><span class="placeholder">' +
+      (hasRender ? "tiled render" : "no render") +
+      "</span></div>" +
+      (hasRender ? `<button class="view-btn" data-id="${lv.id}">View</button>` : "");
     card.addEventListener("click", (e) => {
       if ((e.target as HTMLElement).classList.contains("view-btn")) return;
       selectLevel(lv.id);
@@ -147,8 +155,8 @@ function selectLevel(id: string) {
   selectedId = id;
   const lv = levels.find((l) => l.id === id);
   btnRender.disabled = false;
-  btnRender.textContent = "Render " + lv!.name;
-  document.querySelectorAll(".card").forEach((c) => c.classList.remove("active"));
+  btnRender.textContent = `Render ${lv!.name}`;
+  for (const c of document.querySelectorAll(".card")) c.classList.remove("active");
   const cards = document.querySelectorAll(".card");
   const idx = levels.findIndex((l) => l.id === id);
   if (idx >= 0 && cards[idx]) cards[idx].classList.add("active");
@@ -159,23 +167,23 @@ async function renderLevel(levelId: string, showViewer: boolean) {
   const lv = levels.find((l) => l.id === levelId)!;
   const qs = buildQueryString();
 
-  setStatus('<span class="spinner"></span> Rendering ' + esc(lv.name) + " ...");
+  setStatus(`<span class="spinner"></span> Rendering ${esc(lv.name)} ...`);
   rendering = true;
   btnRender.disabled = true;
   btnRenderAll.disabled = true;
 
   try {
-    const resp = await fetch("/api/render/" + levelId + "?" + qs);
+    const resp = await fetch(`/api/render/${levelId}?${qs}`);
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || "Render failed");
 
-    setStatus("\u2713 " + esc(lv.name) + " ready");
+    setStatus(`\u2713 ${esc(lv.name)} ready`);
     rendered[levelId] = { url: data.url, tiled: !!data.tiled };
 
     if (!data.tiled) {
-      const thumb = document.getElementById("thumb-" + levelId) as HTMLImageElement | null;
+      const thumb = document.getElementById(`thumb-${levelId}`) as HTMLImageElement | null;
       if (thumb) {
-        thumb.src = data.url + "?t=" + Date.now();
+        thumb.src = `${data.url}?t=${Date.now()}`;
         thumb.style.display = "block";
         thumb.parentElement!.querySelector<HTMLElement>(".placeholder")!.style.display = "none";
       }
@@ -187,7 +195,7 @@ async function renderLevel(levelId: string, showViewer: boolean) {
       openViewer(lv.id, lv.name, data.url, !!data.tiled);
     }
   } catch (err: any) {
-    setStatus("\u2717 Error: " + esc(err.message));
+    setStatus(`\u2717 Error: ${esc(err.message)}`);
   } finally {
     rendering = false;
     btnRender.disabled = !selectedId;
@@ -227,7 +235,7 @@ showEditorCheckbox.addEventListener("change", () => {
 
 btnFloorAll.addEventListener("click", () => {
   const allChecked = Array.from(floorCheckboxes).every((cb) => cb.checked);
-  floorCheckboxes.forEach((cb) => (cb.checked = !allChecked));
+  for (const cb of floorCheckboxes) cb.checked = !allChecked;
   saveStateToURL();
   loadCachedStatus().then(renderGrid);
 });
@@ -244,23 +252,25 @@ btnRenderAll.addEventListener("click", async () => {
   btnRenderAll.disabled = true;
   for (let i = 0; i < levels.length; i++) {
     const lv = levels[i];
-    setStatus('<span class="spinner"></span> [' + (i + 1) + "/" + levels.length + "] Rendering " + esc(lv.name) + " ...");
+    setStatus(`<span class="spinner"></span> [${i + 1}/${levels.length}] Rendering ${esc(lv.name)} ...`);
     try {
       const qs = buildQueryString();
-      const resp = await fetch("/api/render/" + lv.id + "?" + qs);
+      const resp = await fetch(`/api/render/${lv.id}?${qs}`);
       const data = await resp.json();
       if (resp.ok) {
         rendered[lv.id] = { url: data.url, tiled: !!data.tiled };
         if (!data.tiled) {
-          const thumb = document.getElementById("thumb-" + lv.id) as HTMLImageElement | null;
+          const thumb = document.getElementById(`thumb-${lv.id}`) as HTMLImageElement | null;
           if (thumb) {
-            thumb.src = data.url + "?t=" + Date.now();
+            thumb.src = `${data.url}?t=${Date.now()}`;
             thumb.style.display = "block";
             thumb.parentElement!.querySelector<HTMLElement>(".placeholder")!.style.display = "none";
           }
         }
       }
-    } catch (_e) { /* continue */ }
+    } catch (_e) {
+      /* continue */
+    }
   }
   setStatus("\u2713 All levels rendered!");
   renderGrid();

@@ -9,12 +9,12 @@
  *   - TYPEFLAG.DAT (shape metadata)
  */
 
-import * as path from "path";
-import * as fs from "fs";
-import { readFlx, type FlxArchive } from "./flx";
-import { loadPalette, getHardcodedPalette, type Palette } from "./palette";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { type FlxArchive, readFlx } from "./flx";
+import { type Glob, loadGlobs } from "./map";
+import { getHardcodedPalette, loadPalette, type Palette } from "./palette";
 import { loadTypeFlags, type ShapeInfo } from "./typeflag";
-import { loadGlobs, type Glob } from "./map";
 
 export interface GameData {
   /** Base directory containing STATIC/, USECODE/, etc. */

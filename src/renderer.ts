@@ -12,14 +12,14 @@
  * that are rendered individually and composited into the final image.
  */
 
+import * as fs from "node:fs";
+import * as path from "node:path";
 import sharp from "sharp";
-import * as fs from "fs";
-import * as path from "path";
-import { type Palette, type Color } from "./palette";
+import { type FlxArchive, getFlxEntryData } from "./flx";
 import { type MapItem, sortMapItems } from "./map";
-import { parseShape, type Shape, type ShapeFrame } from "./shape";
-import { readFlx, getFlxEntryData, type FlxArchive } from "./flx";
-import { type ShapeInfo } from "./typeflag";
+import type { Color, Palette } from "./palette";
+import { parseShape, type ShapeFrame } from "./shape";
+import type { ShapeInfo } from "./typeflag";
 
 /** Rendering options */
 export interface RenderOptions {
@@ -76,7 +76,7 @@ function getShapeFrame(
   palette: Palette,
   cache: ShapeCache,
   shapeIdx: number,
-  frameIdx: number
+  frameIdx: number,
 ): ShapeFrame | null {
   const cached = cache.get(shapeIdx, frameIdx);
   if (cached) return cached;
@@ -118,9 +118,15 @@ function resolveRenderItems(
   cache: ShapeCache,
 ): {
   resolved: ResolvedRenderItem[];
-  minX: number; minY: number; maxX: number; maxY: number;
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
 } {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
   const resolved: ResolvedRenderItem[] = [];
 
   for (const item of items) {
@@ -159,7 +165,7 @@ export async function renderMap(
   shapesArchive: FlxArchive,
   palette: Palette,
   typeFlags: ShapeInfo[] | null,
-  options: RenderOptions = {}
+  options: RenderOptions = {},
 ): Promise<Buffer> {
   const { bgColor, scale = 1, floorMinZ, floorMaxZ, onProgress, outputPath, crop } = options;
 
@@ -177,9 +183,7 @@ export async function renderMap(
   }
 
   // Resolve all items (calculate screen positions, load frames)
-  const { resolved, minX, minY, maxX, maxY } = resolveRenderItems(
-    filteredItems, shapesArchive, palette, cache
-  );
+  const { resolved, minX, minY, maxX, maxY } = resolveRenderItems(filteredItems, shapesArchive, palette, cache);
 
   if (resolved.length === 0) {
     console.log("  No renderable items found.");
@@ -211,8 +215,7 @@ export async function renderMap(
       const frameBottom = drawY + frame.height;
       const cropRight = renderOffsetX + crop.width;
       const cropBottom = renderOffsetY + crop.height;
-      return frameRight > renderOffsetX && drawX < cropRight &&
-             frameBottom > renderOffsetY && drawY < cropBottom;
+      return frameRight > renderOffsetX && drawX < cropRight && frameBottom > renderOffsetY && drawY < cropBottom;
     });
 
     console.log(`  Crop region: (${crop.x}, ${crop.y}) ${crop.width}×${crop.height}`);
@@ -225,16 +228,37 @@ export async function renderMap(
   const rawBytes = imageWidth * imageHeight * 4;
 
   console.log(`  Native dimensions: ${nativeWidth} × ${nativeHeight}`);
-  console.log(`  Output dimensions: ${imageWidth} × ${imageHeight} (scale=${scale}, ${(rawBytes / 1024 / 1024).toFixed(0)} MB raw)`);
+  console.log(
+    `  Output dimensions: ${imageWidth} × ${imageHeight} (scale=${scale}, ${(rawBytes / 1024 / 1024).toFixed(0)} MB raw)`,
+  );
   console.log(`  Sprites to render: ${croppedResolved.length}`);
 
   if (rawBytes <= MAX_SINGLE_IMAGE_BYTES) {
     // Fits in memory — single image
-    return renderDirect(croppedResolved, imageWidth, imageHeight, renderOffsetX, renderOffsetY, scale, bgColor, onProgress);
+    return renderDirect(
+      croppedResolved,
+      imageWidth,
+      imageHeight,
+      renderOffsetX,
+      renderOffsetY,
+      scale,
+      bgColor,
+      onProgress,
+    );
   } else {
     // Too large — tiled output to folder
     const outDir = outputPath ? outputPath.replace(/\.[^.]+$/, "_tiles") : "out_tiles";
-    return renderTiledOutput(croppedResolved, imageWidth, imageHeight, renderOffsetX, renderOffsetY, scale, bgColor, onProgress, outDir);
+    return renderTiledOutput(
+      croppedResolved,
+      imageWidth,
+      imageHeight,
+      renderOffsetX,
+      renderOffsetY,
+      scale,
+      bgColor,
+      onProgress,
+      outDir,
+    );
   }
 }
 
@@ -249,7 +273,7 @@ async function renderDirect(
   offsetY: number,
   scale: number,
   bgColor: Color | undefined,
-  onProgress: ((current: number, total: number) => void) | undefined
+  onProgress: ((current: number, total: number) => void) | undefined,
 ): Promise<Buffer> {
   const imgBuf = Buffer.alloc(imageWidth * imageHeight * 4);
 
@@ -289,8 +313,8 @@ async function renderTiledOutput(
   offsetY: number,
   scale: number,
   bgColor: Color | undefined,
-  onProgress: ((current: number, total: number) => void) | undefined,
-  outDir: string
+  _onProgress: ((current: number, total: number) => void) | undefined,
+  outDir: string,
 ): Promise<Buffer> {
   const cols = Math.ceil(imageWidth / TILE_SIZE);
   const rows = Math.ceil(imageHeight / TILE_SIZE);
@@ -387,7 +411,14 @@ async function renderTiledOutput(
  */
 function writeHtmlViewer(
   outDir: string,
-  metadata: { imageWidth: number; imageHeight: number; tileSize: number; cols: number; rows: number; tiles: Array<{ file: string; x: number; y: number; width: number; height: number }> }
+  metadata: {
+    imageWidth: number;
+    imageHeight: number;
+    tileSize: number;
+    cols: number;
+    rows: number;
+    tiles: Array<{ file: string; x: number; y: number; width: number; height: number }>;
+  },
 ): void {
   const tilesJson = JSON.stringify(metadata.tiles);
   const html = `<!DOCTYPE html>
@@ -703,7 +734,7 @@ function blitFrame(
   frame: ShapeFrame,
   nativeX: number,
   nativeY: number,
-  scale: number
+  scale: number,
 ): void {
   for (let row = 0; row < frame.height; row++) {
     for (let col = 0; col < frame.width; col++) {
@@ -742,7 +773,7 @@ function blitFrameToTile(
   frame: ShapeFrame,
   nativeX: number,
   nativeY: number,
-  scale: number
+  scale: number,
 ): void {
   for (let row = 0; row < frame.height; row++) {
     for (let col = 0; col < frame.width; col++) {
@@ -776,7 +807,7 @@ export async function renderShapeToPng(
   shapesArchive: FlxArchive,
   palette: Palette,
   shapeIdx: number,
-  frameIdx: number
+  frameIdx: number,
 ): Promise<Buffer | null> {
   const cache = createShapeCache();
   const frame = getShapeFrame(shapesArchive, palette, cache, shapeIdx, frameIdx);

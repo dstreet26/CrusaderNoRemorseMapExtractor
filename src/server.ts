@@ -8,13 +8,13 @@
  *   GET /cache/*                 — Serve cached files
  */
 
-import express from "express";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import compression from "compression";
-import * as path from "path";
-import * as fs from "fs";
-import { type GameData } from "./gamedata";
+import express from "express";
 import { getFlxEntryData } from "./flx";
-import { parseFixedItems, resolveMapItems, REMORSE_MISSIONS, REBEL_BASE, REBEL_BASE_DESTROYED } from "./map";
+import type { GameData } from "./gamedata";
+import { parseFixedItems, REBEL_BASE, REBEL_BASE_DESTROYED, REMORSE_MISSIONS, resolveMapItems } from "./map";
 import { renderMap } from "./renderer";
 
 /** Level descriptor for the API */
@@ -26,7 +26,9 @@ interface LevelInfo {
 
 function buildLevelList(): LevelInfo[] {
   const levels: LevelInfo[] = [];
-  for (const m of Object.keys(REMORSE_MISSIONS).map(Number).sort((a, b) => a - b)) {
+  for (const m of Object.keys(REMORSE_MISSIONS)
+    .map(Number)
+    .sort((a, b) => a - b)) {
     levels.push({
       id: `mission_${m}`,
       name: `Mission ${m}`,
@@ -43,7 +45,7 @@ function cacheKey(levelId: string, scale: number, floors: number[], showEditor: 
   let key = `${levelId}_s${scale.toFixed(2).replace(".", "")}`;
   if (floors.length > 0) key += `_f${floors.join("-")}`;
   if (showEditor) key += "_editor";
-  return key + ".png";
+  return `${key}.png`;
 }
 
 /**
@@ -59,11 +61,14 @@ export function startServer(gd: GameData, port: number, cacheDir: string): void 
   app.use(compression());
 
   // Serve cached files with aggressive caching headers
-  app.use("/cache", express.static(cacheDir, {
-    maxAge: '1y',  // Cache for 1 year
-    immutable: true,  // Files never change
-    etag: true,  // Enable ETags for validation
-  }));
+  app.use(
+    "/cache",
+    express.static(cacheDir, {
+      maxAge: "1y", // Cache for 1 year
+      immutable: true, // Files never change
+      etag: true, // Enable ETags for validation
+    }),
+  );
 
   // ── API: level list ──
   app.get("/api/levels", (_req, res) => {
@@ -74,7 +79,12 @@ export function startServer(gd: GameData, port: number, cacheDir: string): void 
   app.get("/api/cached", (req, res) => {
     const scale = Math.max(0.05, Math.min(2, parseFloat(req.query.scale as string) || 0.25));
     const floorsParam = req.query.floors as string | undefined;
-    const floors = floorsParam ? floorsParam.split(",").map(Number).filter(n => !isNaN(n)) : [];
+    const floors = floorsParam
+      ? floorsParam
+          .split(",")
+          .map(Number)
+          .filter((n) => !Number.isNaN(n))
+      : [];
     const showEditor = req.query.showEditor === "true";
 
     const result: Record<string, { url: string; tiled: boolean }> = {};
@@ -106,7 +116,12 @@ export function startServer(gd: GameData, port: number, cacheDir: string): void 
 
     const scale = Math.max(0.05, Math.min(2, parseFloat(req.query.scale as string) || 0.25));
     const floorsParam = req.query.floors as string | undefined;
-    const floors = floorsParam ? floorsParam.split(",").map(Number).filter(n => !isNaN(n)) : [];
+    const floors = floorsParam
+      ? floorsParam
+          .split(",")
+          .map(Number)
+          .filter((n) => !Number.isNaN(n))
+      : [];
     const showEditor = req.query.showEditor === "true";
 
     const key = cacheKey(levelId, scale, floors, showEditor);
@@ -159,7 +174,9 @@ export function startServer(gd: GameData, port: number, cacheDir: string): void 
         floorMaxZ = (maxFloor + 1) * 40 - 1;
       }
 
-      console.log(`  Rendering ${level.name} (scale=${scale}, floors=${floors.length > 0 ? floors.join(",") : "all"})...`);
+      console.log(
+        `  Rendering ${level.name} (scale=${scale}, floors=${floors.length > 0 ? floors.join(",") : "all"})...`,
+      );
 
       const result = await renderMap(allItems, gd.shapesArchive, gd.palette, gd.typeFlags, {
         bgColor: { r: 0, g: 0, b: 0, a: 255 },

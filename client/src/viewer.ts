@@ -1,4 +1,13 @@
-import { getSelectedFloors, setStatus, loadCachedStatus, renderGrid, levels, rendered, scaleSelect, showEditorCheckbox } from "./main";
+import {
+  getSelectedFloors,
+  levels,
+  loadCachedStatus,
+  rendered,
+  renderGrid,
+  scaleSelect,
+  setStatus,
+  showEditorCheckbox,
+} from "./main";
 
 const overlay = document.getElementById("viewer-overlay")!;
 const vp = document.getElementById("viewer-viewport")!;
@@ -51,8 +60,8 @@ async function refreshViewer() {
   const scale = viewerScale.value;
   const floors = getSelectedFloors(viewerFloorCheckboxes);
   const showEditor = viewerShowEditor.checked;
-  let qs = "scale=" + scale;
-  if (floors.length > 0) qs += "&floors=" + floors.join(",");
+  let qs = `scale=${scale}`;
+  if (floors.length > 0) qs += `&floors=${floors.join(",")}`;
   if (showEditor) qs += "&showEditor=true";
 
   if (viewerMode === "image") {
@@ -63,7 +72,7 @@ async function refreshViewer() {
   setStatus('<span class="spinner"></span> Rendering with new settings...');
 
   try {
-    const resp = await fetch("/api/render/" + currentViewerLevelId + "?" + qs);
+    const resp = await fetch(`/api/render/${currentViewerLevelId}?${qs}`);
     const data = await resp.json();
 
     if (resp.ok) {
@@ -79,7 +88,9 @@ async function refreshViewer() {
 
       viewerScale.value = curScale;
       viewerShowEditor.checked = curEditor;
-      Array.from(viewerFloorCheckboxes).forEach((cb, i) => (cb.checked = curFloors[i]));
+      Array.from(viewerFloorCheckboxes).forEach((cb, i) => {
+        cb.checked = curFloors[i];
+      });
 
       rendered[currentViewerLevelId!] = { url: data.url, tiled: !!data.tiled };
       viewerRefreshBtn.disabled = false;
@@ -91,19 +102,19 @@ async function refreshViewer() {
       if (viewerMode === "image") vImg.style.opacity = "1";
       viewerRefreshBtn.disabled = false;
       viewerRefreshBtn.textContent = "Refresh";
-      setStatus("Error: " + (data.error || "Render failed"));
+      setStatus(`Error: ${data.error || "Render failed"}`);
     }
   } catch (err: any) {
     if (viewerMode === "image") vImg.style.opacity = "1";
     viewerRefreshBtn.disabled = false;
     viewerRefreshBtn.textContent = "Refresh";
-    setStatus("Error: " + err.message);
+    setStatus(`Error: ${err.message}`);
   }
 }
 
 function applyViewerTransform() {
-  vImg.style.transform = "translate(" + vPanX + "px," + vPanY + "px) scale(" + vZoom + ")";
-  vZoomLabel.textContent = Math.round(vZoom * 100) + "%";
+  vImg.style.transform = `translate(${vPanX}px,${vPanY}px) scale(${vZoom})`;
+  vZoomLabel.textContent = `${Math.round(vZoom * 100)}%`;
   updateViewerHud();
   saveViewerStateToURL();
 }
@@ -121,7 +132,7 @@ export function saveViewerStateToURL() {
     params.set("panX", Math.round(vPanX).toString());
     params.set("panY", Math.round(vPanY).toString());
   }
-  window.history.replaceState(null, "", "#" + params.toString());
+  window.history.replaceState(null, "", `#${params.toString()}`);
 }
 
 function screenToWorld(screenX: number, screenY: number) {
@@ -153,10 +164,25 @@ function updateViewerHud() {
   const viewHeight = Math.round((bottomRight.y - topLeft.y) / scale);
 
   vHud.innerHTML =
-    '<div class="coord-line"><span class="coord-label">Image size:</span><span class="coord-value">' + iw + " × " + ih + "px</span></div>" +
-    '<div class="coord-line"><span class="coord-label">Mouse:</span><span class="coord-value">x=' + worldMouseX + ", y=" + worldMouseY + "</span></div>" +
+    '<div class="coord-line"><span class="coord-label">Image size:</span><span class="coord-value">' +
+    iw +
+    " × " +
+    ih +
+    "px</span></div>" +
+    '<div class="coord-line"><span class="coord-label">Mouse:</span><span class="coord-value">x=' +
+    worldMouseX +
+    ", y=" +
+    worldMouseY +
+    "</span></div>" +
     '<div class="coord-line"><span class="coord-label">Viewport:</span><span class="coord-value">' +
-    "x=" + viewX + " y=" + viewY + " width=" + viewWidth + " height=" + viewHeight +
+    "x=" +
+    viewX +
+    " y=" +
+    viewY +
+    " width=" +
+    viewWidth +
+    " height=" +
+    viewHeight +
     "</span></div>" +
     '<div class="copy-hint">Use viewport coords with --x --y --width --height</div>';
 }
@@ -189,7 +215,13 @@ export interface RestoreState {
   panY: number;
 }
 
-export function openViewer(levelId: string, name: string, url: string, tiled: boolean, restoreState?: RestoreState | null) {
+export function openViewer(
+  levelId: string,
+  name: string,
+  url: string,
+  tiled: boolean,
+  restoreState?: RestoreState | null,
+) {
   currentViewerLevelId = levelId;
   syncViewerControls();
   vTitle.textContent = name;
@@ -208,8 +240,11 @@ export function openViewer(levelId: string, name: string, url: string, tiled: bo
     vImg.style.display = "none";
     vIframe.style.display = "block";
     vIframe.src = url;
-    vHud.innerHTML = '<div class="coord-line">Tiled render — zoom controls inside viewer</div><div class="copy-hint">Coordinates not available for tiled renders</div>';
-    zoomControls.forEach((el) => { if (el) el.style.display = "none"; });
+    vHud.innerHTML =
+      '<div class="coord-line">Tiled render — zoom controls inside viewer</div><div class="copy-hint">Coordinates not available for tiled renders</div>';
+    zoomControls.forEach((el) => {
+      if (el) el.style.display = "none";
+    });
     vp.style.cursor = "default";
   } else {
     viewerMode = "image";
@@ -217,11 +252,11 @@ export function openViewer(levelId: string, name: string, url: string, tiled: bo
     vIframe.src = "";
     vImg.style.display = "block";
     vImg.src = url;
-    vImg.onload = function () {
+    vImg.onload = () => {
       vImageOffsetX = 0;
       vImageOffsetY = 0;
       viewerFit();
-      if (savedZoom !== null && !isNaN(savedZoom) && !isNaN(savedPanX!) && !isNaN(savedPanY!)) {
+      if (savedZoom !== null && !Number.isNaN(savedZoom) && !Number.isNaN(savedPanX!) && !Number.isNaN(savedPanY!)) {
         vZoom = savedZoom;
         vPanX = savedPanX!;
         vPanY = savedPanY!;
@@ -229,7 +264,9 @@ export function openViewer(levelId: string, name: string, url: string, tiled: bo
       }
       updateViewerHud();
     };
-    zoomControls.forEach((el) => { if (el) el.style.display = ""; });
+    zoomControls.forEach((el) => {
+      if (el) el.style.display = "";
+    });
     vp.style.cursor = "grab";
   }
   overlay.classList.add("visible");
@@ -241,7 +278,7 @@ export function initViewer() {
 
   viewerScale.addEventListener("change", saveViewerStateToURL);
   viewerShowEditor.addEventListener("change", saveViewerStateToURL);
-  viewerFloorCheckboxes.forEach((cb) => cb.addEventListener("change", saveViewerStateToURL));
+  for (const cb of viewerFloorCheckboxes) cb.addEventListener("change", saveViewerStateToURL);
 
   document.getElementById("viewer-close")!.addEventListener("click", () => {
     overlay.classList.remove("visible");
@@ -249,29 +286,46 @@ export function initViewer() {
   });
   document.getElementById("viewer-fit")!.addEventListener("click", viewerFit);
   document.getElementById("viewer-reset")!.addEventListener("click", () => {
-    vZoom = 1; vPanX = 0; vPanY = 0; applyViewerTransform();
+    vZoom = 1;
+    vPanX = 0;
+    vPanY = 0;
+    applyViewerTransform();
   });
   document.getElementById("viewer-zin")!.addEventListener("click", () => viewerZoomCenter(1.25));
   document.getElementById("viewer-zout")!.addEventListener("click", () => viewerZoomCenter(1 / 1.25));
 
-  vp.addEventListener("wheel", (e) => {
-    if (viewerMode !== "image") return;
-    e.preventDefault();
-    const rect = vp.getBoundingClientRect();
-    const zoomFactor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-    viewerZoomAt(e.clientX - rect.left, e.clientY - rect.top, zoomFactor);
-  }, { passive: false });
+  vp.addEventListener(
+    "wheel",
+    (e) => {
+      if (viewerMode !== "image") return;
+      e.preventDefault();
+      const rect = vp.getBoundingClientRect();
+      const zoomFactor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+      viewerZoomAt(e.clientX - rect.left, e.clientY - rect.top, zoomFactor);
+    },
+    { passive: false },
+  );
 
-  let vDragging = false, vDx = 0, vDy = 0, vPx = 0, vPy = 0;
+  let vDragging = false,
+    vDx = 0,
+    vDy = 0,
+    vPx = 0,
+    vPy = 0;
   vp.addEventListener("mousedown", (e) => {
     if (viewerMode !== "image") return;
     if (e.button !== 0) return;
-    vDragging = true; vDx = e.clientX; vDy = e.clientY; vPx = vPanX; vPy = vPanY;
-    vp.classList.add("dragging"); e.preventDefault();
+    vDragging = true;
+    vDx = e.clientX;
+    vDy = e.clientY;
+    vPx = vPanX;
+    vPy = vPanY;
+    vp.classList.add("dragging");
+    e.preventDefault();
   });
   window.addEventListener("mousemove", (e) => {
     if (vDragging) {
-      vPanX = vPx + (e.clientX - vDx); vPanY = vPy + (e.clientY - vDy);
+      vPanX = vPx + (e.clientX - vDx);
+      vPanY = vPy + (e.clientY - vDy);
       applyViewerTransform();
     }
   });
@@ -285,14 +339,35 @@ export function initViewer() {
     vMouseY = world.y;
     updateViewerHud();
   });
-  window.addEventListener("mouseup", () => { vDragging = false; vp.classList.remove("dragging"); });
+  window.addEventListener("mouseup", () => {
+    vDragging = false;
+    vp.classList.remove("dragging");
+  });
 
   window.addEventListener("keydown", (e) => {
     if (!overlay.classList.contains("visible")) return;
-    if (e.key === "Escape") { overlay.classList.remove("visible"); e.preventDefault(); }
-    if (e.key === "+" || e.key === "=") { viewerZoomCenter(1.25); e.preventDefault(); }
-    if (e.key === "-") { viewerZoomCenter(1 / 1.25); e.preventDefault(); }
-    if (e.key === "f" || e.key === "F") { viewerFit(); e.preventDefault(); }
-    if (e.key === "0") { vZoom = 1; vPanX = 0; vPanY = 0; applyViewerTransform(); e.preventDefault(); }
+    if (e.key === "Escape") {
+      overlay.classList.remove("visible");
+      e.preventDefault();
+    }
+    if (e.key === "+" || e.key === "=") {
+      viewerZoomCenter(1.25);
+      e.preventDefault();
+    }
+    if (e.key === "-") {
+      viewerZoomCenter(1 / 1.25);
+      e.preventDefault();
+    }
+    if (e.key === "f" || e.key === "F") {
+      viewerFit();
+      e.preventDefault();
+    }
+    if (e.key === "0") {
+      vZoom = 1;
+      vPanX = 0;
+      vPanY = 0;
+      applyViewerTransform();
+      e.preventDefault();
+    }
   });
 }

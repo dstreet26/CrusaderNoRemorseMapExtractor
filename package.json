@@ -21,7 +21,10 @@
     "export-all": "node dist/index.js export-all --input-data-dir=\"gog/Crusader No Remorse\" --output-dir=exports --scale 0.25",
     "serve": "node dist/index.js serve --input-data-dir=\"gog/Crusader No Remorse\"",
     "dev:server": "tsc --watch",
-    "dev:client": "cd client && npx vite"
+    "dev:client": "cd client && npx vite",
+    "format": "npx biome format --write .",
+    "lint": "npx biome lint --fix .",
+    "check": "npx biome check --fix ."
   },
   "keywords": [],
   "author": "",
@@ -34,6 +37,7 @@
     "sharp": "^0.34.5"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.10",
     "@types/compression": "^1.8.1",
     "@types/express": "^5.0.6",
     "@types/node": "^25.3.3",
