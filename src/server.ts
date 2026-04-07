@@ -39,9 +39,9 @@ function buildLevelList(): LevelInfo[] {
 }
 
 /** Generate a cache key filename for a given render request */
-function cacheKey(levelId: string, scale: number, floor: number | null, showEditor: boolean): string {
+function cacheKey(levelId: string, scale: number, floors: number[], showEditor: boolean): string {
   let key = `${levelId}_s${scale.toFixed(2).replace(".", "")}`;
-  if (floor !== null) key += `_f${floor}`;
+  if (floors.length > 0) key += `_f${floors.join("-")}`;
   if (showEditor) key += "_editor";
   return key + ".png";
 }
@@ -73,13 +73,13 @@ export function startServer(gd: GameData, port: number, cacheDir: string): void 
   // ── API: cached status ──
   app.get("/api/cached", (req, res) => {
     const scale = Math.max(0.05, Math.min(2, parseFloat(req.query.scale as string) || 0.25));
-    const floorParam = req.query.floor as string | undefined;
-    const floor = floorParam !== undefined && floorParam !== "" ? parseInt(floorParam, 10) : null;
+    const floorsParam = req.query.floors as string | undefined;
+    const floors = floorsParam ? floorsParam.split(",").map(Number).filter(n => !isNaN(n)) : [];
     const showEditor = req.query.showEditor === "true";
 
     const result: Record<string, { url: string; tiled: boolean }> = {};
     for (const lv of levels) {
-      const key = cacheKey(lv.id, scale, floor, showEditor);
+      const key = cacheKey(lv.id, scale, floors, showEditor);
       const cachedPath = path.join(cacheDir, key);
       const tiledDir = cachedPath.replace(/\.[^.]+$/, "_tiles");
 
@@ -105,11 +105,11 @@ export function startServer(gd: GameData, port: number, cacheDir: string): void 
     }
 
     const scale = Math.max(0.05, Math.min(2, parseFloat(req.query.scale as string) || 0.25));
-    const floorParam = req.query.floor as string | undefined;
-    const floor = floorParam !== undefined && floorParam !== "" ? parseInt(floorParam, 10) : null;
+    const floorsParam = req.query.floors as string | undefined;
+    const floors = floorsParam ? floorsParam.split(",").map(Number).filter(n => !isNaN(n)) : [];
     const showEditor = req.query.showEditor === "true";
 
-    const key = cacheKey(levelId, scale, floor, showEditor);
+    const key = cacheKey(levelId, scale, floors, showEditor);
     const cachedPath = path.join(cacheDir, key);
     const tiledDir = cachedPath.replace(/\.[^.]+$/, "_tiles");
 
@@ -151,12 +151,15 @@ export function startServer(gd: GameData, port: number, cacheDir: string): void 
 
       let floorMinZ: number | undefined;
       let floorMaxZ: number | undefined;
-      if (floor !== null) {
-        floorMinZ = floor * 40;
-        floorMaxZ = (floor + 1) * 40 - 1;
+      if (floors.length > 0) {
+        // Calculate min/max Z for selected floors
+        const minFloor = Math.min(...floors);
+        const maxFloor = Math.max(...floors);
+        floorMinZ = minFloor * 40;
+        floorMaxZ = (maxFloor + 1) * 40 - 1;
       }
 
-      console.log(`  Rendering ${level.name} (scale=${scale}, floor=${floor ?? "all"})...`);
+      console.log(`  Rendering ${level.name} (scale=${scale}, floors=${floors.length > 0 ? floors.join(",") : "all"})...`);
 
       const result = await renderMap(allItems, gd.shapesArchive, gd.palette, gd.typeFlags, {
         bgColor: { r: 0, g: 0, b: 0, a: 255 },
@@ -365,15 +368,25 @@ function getLandingPageHtml(): string {
     </select>
   </div>
   <div>
-    <label>Floor</label><br>
-    <select id="floor-select">
-      <option value="">All floors</option>
-      <option value="0">Floor 0</option>
-      <option value="1">Floor 1</option>
-      <option value="2">Floor 2</option>
-      <option value="3">Floor 3</option>
-      <option value="4">Floor 4</option>
-    </select>
+    <label>Floors</label><br>
+    <div style="display:flex;flex-direction:column;gap:2px">
+      <label style="font-weight:normal;cursor:pointer">
+        <input type="checkbox" class="floor-checkbox" value="0" style="vertical-align:middle"> Floor 0
+      </label>
+      <label style="font-weight:normal;cursor:pointer">
+        <input type="checkbox" class="floor-checkbox" value="1" style="vertical-align:middle"> Floor 1
+      </label>
+      <label style="font-weight:normal;cursor:pointer">
+        <input type="checkbox" class="floor-checkbox" value="2" style="vertical-align:middle"> Floor 2
+      </label>
+      <label style="font-weight:normal;cursor:pointer">
+        <input type="checkbox" class="floor-checkbox" value="3" style="vertical-align:middle"> Floor 3
+      </label>
+      <label style="font-weight:normal;cursor:pointer">
+        <input type="checkbox" class="floor-checkbox" value="4" style="vertical-align:middle"> Floor 4
+      </label>
+      <button id="floor-all" style="margin-top:3px;font-size:10px;padding:2px 5px">All</button>
+    </div>
   </div>
   <div>
     <label>Options</label><br>
@@ -405,9 +418,32 @@ function getLandingPageHtml(): string {
     <button id="viewer-zin">+</button>
     <button id="viewer-fit">Fit</button>
     <button id="viewer-reset">1:1</button>
+    <!-- TODO: Fix zoom sensitivity for trackpad
     <span style="margin-left:15px;opacity:0.6">Zoom Sensitivity:</span>
     <input type="range" id="zoom-sensitivity" min="0.3" max="2.0" step="0.1" value="1.0" style="width:80px;vertical-align:middle">
     <span id="zoom-sensitivity-value" style="opacity:0.6;min-width:30px;display:inline-block">1.0×</span>
+    -->
+    <span style="margin-left:15px;opacity:0.6">|</span>
+    <label style="margin-left:10px;font-weight:normal;cursor:pointer;opacity:0.9">
+      <input type="checkbox" id="viewer-show-editor" style="vertical-align:middle"> Editor
+    </label>
+    <span style="margin-left:5px;opacity:0.6">Floors:</span>
+    <label style="margin-left:5px;font-weight:normal;cursor:pointer;opacity:0.9">
+      <input type="checkbox" class="viewer-floor-checkbox" value="0" style="vertical-align:middle"> 0
+    </label>
+    <label style="margin-left:5px;font-weight:normal;cursor:pointer;opacity:0.9">
+      <input type="checkbox" class="viewer-floor-checkbox" value="1" style="vertical-align:middle"> 1
+    </label>
+    <label style="margin-left:5px;font-weight:normal;cursor:pointer;opacity:0.9">
+      <input type="checkbox" class="viewer-floor-checkbox" value="2" style="vertical-align:middle"> 2
+    </label>
+    <label style="margin-left:5px;font-weight:normal;cursor:pointer;opacity:0.9">
+      <input type="checkbox" class="viewer-floor-checkbox" value="3" style="vertical-align:middle"> 3
+    </label>
+    <label style="margin-left:5px;font-weight:normal;cursor:pointer;opacity:0.9">
+      <input type="checkbox" class="viewer-floor-checkbox" value="4" style="vertical-align:middle"> 4
+    </label>
+    <button id="viewer-refresh" style="margin-left:10px">Refresh</button>
   </div>
   <div id="viewer-viewport">
     <img id="viewer-img" src="">
@@ -422,8 +458,9 @@ function getLandingPageHtml(): string {
   const status = document.getElementById('status');
   const btnRender = document.getElementById('btn-render');
   const btnRenderAll = document.getElementById('btn-render-all');
+  const btnFloorAll = document.getElementById('floor-all');
   const scaleSelect = document.getElementById('scale-select');
-  const floorSelect = document.getElementById('floor-select');
+  const floorCheckboxes = document.querySelectorAll('.floor-checkbox');
   const showEditorCheckbox = document.getElementById('show-editor');
 
   let levels = [];
@@ -432,13 +469,20 @@ function getLandingPageHtml(): string {
   // Track rendered URLs: levelId -> { url, tiled }
   const rendered = {};
 
+  // Helper: get selected floors from checkboxes
+  function getSelectedFloors() {
+    return Array.from(floorCheckboxes)
+      .filter(cb => cb.checked)
+      .map(cb => parseInt(cb.value, 10));
+  }
+
   // Helper: build query string from current UI state
   function buildQueryString() {
     const scale = scaleSelect.value;
-    const floor = floorSelect.value;
+    const floors = getSelectedFloors();
     const showEditor = showEditorCheckbox.checked;
     let qs = 'scale=' + scale;
-    if (floor !== '') qs += '&floor=' + floor;
+    if (floors.length > 0) qs += '&floors=' + floors.join(',');
     if (showEditor) qs += '&showEditor=true';
     return qs;
   }
@@ -465,10 +509,19 @@ function getLandingPageHtml(): string {
   scaleSelect.addEventListener('change', function() {
     loadCachedStatus().then(renderGrid);
   });
-  floorSelect.addEventListener('change', function() {
-    loadCachedStatus().then(renderGrid);
+  floorCheckboxes.forEach(cb => {
+    cb.addEventListener('change', function() {
+      loadCachedStatus().then(renderGrid);
+    });
   });
   showEditorCheckbox.addEventListener('change', function() {
+    loadCachedStatus().then(renderGrid);
+  });
+
+  // "All" button toggles all floor checkboxes
+  btnFloorAll.addEventListener('click', function() {
+    const allChecked = Array.from(floorCheckboxes).every(cb => cb.checked);
+    floorCheckboxes.forEach(cb => cb.checked = !allChecked);
     loadCachedStatus().then(renderGrid);
   });
 
@@ -496,7 +549,7 @@ function getLandingPageHtml(): string {
         const r = rendered[id];
         if (r) {
           const lv = levels.find(l => l.id === id);
-          openViewer(lv.name, r.url, r.tiled);
+          openViewer(lv.id, lv.name, r.url, r.tiled);
         }
       });
     });
@@ -550,7 +603,7 @@ function getLandingPageHtml(): string {
       renderGrid();
 
       if (showViewer) {
-        openViewer(lv.name, data.url, !!data.tiled);
+        openViewer(lv.id, lv.name, data.url, !!data.tiled);
       }
     } catch (err) {
       setStatus('\\u2717 Error: ' + esc(err.message));
@@ -642,18 +695,114 @@ function getLandingPageHtml(): string {
   let vMouseX = 0, vMouseY = 0; // Current mouse world coordinates
   let vImageOffsetX = 0, vImageOffsetY = 0; // Image offset in world space
 
-  // Zoom sensitivity control
-  let zoomSensitivity = parseFloat(localStorage.getItem('zoomSensitivity') || '1.0');
+  // Zoom sensitivity control (TODO: Fix for trackpad)
+  let zoomSensitivity = 1.0; // Disabled for now
+  /* Commented out - not working properly with trackpad
   const sensitivitySlider = document.getElementById('zoom-sensitivity');
   const sensitivityValue = document.getElementById('zoom-sensitivity-value');
-  sensitivitySlider.value = zoomSensitivity.toString();
-  sensitivityValue.textContent = zoomSensitivity.toFixed(1) + '×';
-
-  sensitivitySlider.addEventListener('input', function() {
-    zoomSensitivity = parseFloat(this.value);
+  if (sensitivitySlider && sensitivityValue) {
+    zoomSensitivity = parseFloat(localStorage.getItem('zoomSensitivity') || '1.0');
+    sensitivitySlider.value = zoomSensitivity.toString();
     sensitivityValue.textContent = zoomSensitivity.toFixed(1) + '×';
-    localStorage.setItem('zoomSensitivity', zoomSensitivity.toString());
-  });
+    sensitivitySlider.addEventListener('input', function() {
+      zoomSensitivity = parseFloat(this.value);
+      sensitivityValue.textContent = zoomSensitivity.toFixed(1) + '×';
+      localStorage.setItem('zoomSensitivity', zoomSensitivity.toString());
+    });
+  }
+  */
+
+  // Viewer controls
+  const viewerShowEditor = document.getElementById('viewer-show-editor');
+  const viewerFloorCheckboxes = document.querySelectorAll('.viewer-floor-checkbox');
+  const viewerRefreshBtn = document.getElementById('viewer-refresh');
+  let currentViewerLevelId = null;
+
+  // Sync viewer controls with main controls when viewer opens
+  function syncViewerControls() {
+    viewerShowEditor.checked = showEditorCheckbox.checked;
+    const selectedFloors = getSelectedFloors();
+    viewerFloorCheckboxes.forEach(cb => {
+      cb.checked = selectedFloors.includes(parseInt(cb.value, 10));
+    });
+  }
+
+  // Refresh viewer with current settings
+  async function refreshViewer() {
+    if (!currentViewerLevelId || viewerMode !== 'image') return;
+
+    // Build query string from viewer controls
+    const scale = scaleSelect.value;
+    const floors = Array.from(viewerFloorCheckboxes)
+      .filter(cb => cb.checked)
+      .map(cb => parseInt(cb.value, 10));
+    const showEditor = viewerShowEditor.checked;
+    let qs = 'scale=' + scale;
+    if (floors.length > 0) qs += '&floors=' + floors.join(',');
+    if (showEditor) qs += '&showEditor=true';
+
+    // Preserve zoom and pan
+    const oldZoom = vZoom;
+    const oldPanX = vPanX;
+    const oldPanY = vPanY;
+
+    // Show loading state
+    vImg.style.opacity = '0.3';
+    viewerRefreshBtn.disabled = true;
+    viewerRefreshBtn.textContent = 'Rendering...';
+    setStatus('<span class="spinner"></span> Rendering with new settings...');
+
+    try {
+      // Trigger render (will use cache if available or render if needed)
+      const resp = await fetch('/api/render/' + currentViewerLevelId + '?' + qs);
+      const data = await resp.json();
+
+      if (resp.ok) {
+        if (!data.tiled) {
+          // Update image
+          vImg.src = data.url + '?t=' + Date.now();
+          vImg.onload = function() {
+            // Restore zoom and pan
+            vZoom = oldZoom;
+            vPanX = oldPanX;
+            vPanY = oldPanY;
+            applyViewerTransform();
+            vImg.style.opacity = '1';
+            viewerRefreshBtn.disabled = false;
+            viewerRefreshBtn.textContent = 'Refresh';
+            setStatus('✓ View refreshed');
+
+            // Update cached status
+            loadCachedStatus().then(renderGrid);
+          };
+          vImg.onerror = function() {
+            vImg.style.opacity = '1';
+            viewerRefreshBtn.disabled = false;
+            viewerRefreshBtn.textContent = 'Refresh';
+            setStatus('✗ Error loading image');
+          };
+        } else {
+          // Tiled render - would need to reload iframe
+          vImg.style.opacity = '1';
+          viewerRefreshBtn.disabled = false;
+          viewerRefreshBtn.textContent = 'Refresh';
+          setStatus('Tiled renders cannot be refreshed in-place. Close and reopen viewer.');
+        }
+      } else {
+        vImg.style.opacity = '1';
+        viewerRefreshBtn.disabled = false;
+        viewerRefreshBtn.textContent = 'Refresh';
+        setStatus('✗ Error: ' + (data.error || 'Render failed'));
+      }
+    } catch (err) {
+      vImg.style.opacity = '1';
+      viewerRefreshBtn.disabled = false;
+      viewerRefreshBtn.textContent = 'Refresh';
+      setStatus('✗ Error: ' + err.message);
+    }
+  }
+
+  viewerRefreshBtn.addEventListener('click', refreshViewer);
 
   function applyViewerTransform() {
     vImg.style.transform = 'translate(' + vPanX + 'px,' + vPanY + 'px) scale(' + vZoom + ')';
@@ -723,7 +872,9 @@ function getLandingPageHtml(): string {
     applyViewerTransform();
   }
 
-  function openViewer(name, url, tiled) {
+  function openViewer(levelId, name, url, tiled) {
+    currentViewerLevelId = levelId;
+    syncViewerControls();
     vTitle.textContent = name;
     if (tiled) {
       viewerMode = 'tiled';
@@ -767,10 +918,9 @@ function getLandingPageHtml(): string {
     if (viewerMode !== 'image') return;
     e.preventDefault();
     const rect = vp.getBoundingClientRect();
-    // Apply zoom sensitivity: base zoom factor powered by sensitivity
-    const baseZoom = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-    const effectiveZoom = Math.pow(baseZoom, zoomSensitivity);
-    viewerZoomAt(e.clientX - rect.left, e.clientY - rect.top, effectiveZoom);
+    // Fixed zoom factor (sensitivity control disabled for now)
+    const zoomFactor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    viewerZoomAt(e.clientX - rect.left, e.clientY - rect.top, zoomFactor);
   }, { passive: false });
 
   let vDragging = false, vDx = 0, vDy = 0, vPx = 0, vPy = 0;
