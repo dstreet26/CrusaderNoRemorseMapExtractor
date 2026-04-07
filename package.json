@@ -8,6 +8,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "clean": "rm -rf dist cache",
     "demo:overview": "node dist/index.js render-level --input-data-dir=\"gog/Crusader No Remorse\" --level=1 --scale 0.25 --output=demo_overview.png",
     "demo:zoomed": "node dist/index.js render-area --input-data-dir=\"gog/Crusader No Remorse\" --level=1 --x=13892 --y=13528 --width=4344 --height=2308 --output=demo_zoomed.png",
     "shapes": "node dist/index.js dump-shapes --input-data-dir=\"gog/Crusader No Remorse\" --output-dir=shapes",
