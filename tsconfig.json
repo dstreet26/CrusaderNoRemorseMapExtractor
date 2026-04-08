@@ -15,5 +15,5 @@
     "sourceMap": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "old", "scummvm-2.8.1", "cnr-development", "gog", "client"]
+  "exclude": ["node_modules", "dist", "client"]
 }

@@ -1,12 +1,6 @@
-scummvm-2.8.1
-cnr-development
-gog
-old
 node_modules
-.playwright-mcp
-*.png
 dist
-Slides/
 cache/
-CrusaderReference2
 client/dist
+gog
+*.png
