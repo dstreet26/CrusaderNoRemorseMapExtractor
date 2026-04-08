@@ -4,6 +4,9 @@ const fs = require('fs');
 const { PNG } = require('pngjs');
 const { execSync } = require('child_process');
 
+// Get data path from command line argument or use default
+const dataPath = process.argv[2] || 'gog/Crusader No Remorse';
+
 function loadPNG(path) {
   const data = fs.readFileSync(path);
   return PNG.sync.read(data);
@@ -122,7 +125,7 @@ for (const offset of offsets) {
 
     // Render
     execSync(
-      `node dist/index.js render-area --input-data-dir="CrusaderReference2/gog_gamefiles_with_cd_dump" --level=1 --x=${x} --y=${y} --width=${width} --height=${height} --output=${outputFile}`,
+      `node dist/index.js render-area --input-data-dir="${dataPath}" --level=1 --x=${x} --y=${y} --width=${width} --height=${height} --output=${outputFile}`,
       { stdio: 'pipe', timeout: 60000 }
     );
 

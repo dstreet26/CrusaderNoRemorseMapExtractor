@@ -22,6 +22,7 @@
     "serve": "node dist/index.js serve --input-data-dir=\"gog/Crusader No Remorse\"",
     "dev:server": "tsc --watch",
     "dev:client": "cd client && npx vite",
+    "test:shape-offsets": "node tooling/test_shape_offsets.js \"gog/Crusader No Remorse\"",
     "format": "npx biome format --write .",
     "lint": "npx biome lint --fix .",
     "check": "npx biome check --fix ."
