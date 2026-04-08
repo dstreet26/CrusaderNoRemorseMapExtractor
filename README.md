@@ -1,5 +1,26 @@
 
-# Crusader No Remorse Map Extractor
+# Crusader No Remorse Map Extractor (and Viewer)
+
+## Used for reference / Credits / Special Thanks
+
+- https://github.com/dascandy/cnr
+- https://github.com/scummvm/scummvm
+
+## Inspiration
+
+- https://www.vgmaps.com/
+
+# Disclaimers
+
+-  Vibe coded with mostly Opus 4.x. Commit messages, steering, and testing were me. Commit history might be useful to see pitfalls.
+
+- Might work with other games in the Ultima 8 family (like Crusader: No Regret), but I did not test.
+
+- I make no garuntees about anything in this maintaining it. Feel free to fork!
+  
+---
+
+# Overview
 
 Renders *Crusader: No Remorse* game data files into high-resolution PNG map images using accurate isometric projection. Extracts and processes FLX archives, shape graphics, FIXED.DAT maps, GLOB prefabs, palettes, and type flags. Produces optimized tiled output for large maps with an interactive web viewer.
 
