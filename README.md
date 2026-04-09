@@ -22,7 +22,7 @@ https://github.com/user-attachments/assets/89da3316-1da5-4bcd-a6a5-c85141708cad
 
 - Might work with other games in the Ultima 8 family (like Crusader: No Regret), but I did not test.
 
-- I make no garuntees about anything in this maintaining it. Feel free to fork!
+- I make no garuntees about anything in this or about maintaining it. Feel free to fork!
   
 ---
 
