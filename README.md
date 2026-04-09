@@ -16,14 +16,22 @@ https://github.com/user-attachments/assets/89da3316-1da5-4bcd-a6a5-c85141708cad
 
 - https://www.vgmaps.com/
 
-# Disclaimers
+## Disclaimers
 
 -  Vibe coded with mostly Opus 4.x. Commit messages, steering, and testing were me. Commit history might be useful to see pitfalls.
 
 - Might work with other games in the Ultima 8 family (like Crusader: No Regret), but I did not test.
 
-- I make no garuntees about anything in this or about maintaining it. Feel free to fork!
-  
+- I make no guarantees about anything in this or about maintaining it. Feel free to fork!
+
+## Improvement Ideas
+
+### Better viewer - Leaflet or OpenLayers or something
+
+- *Need the ability to toggle different layers quickly* in order to show different parts of the map easier.
+- Automatic scaling
+- Better MacOS trackpad feeling
+
 ---
 
 # Overview
